@@ -39,7 +39,12 @@ def generate_initial_recommendations(user_id, weather_preference, user_preferenc
         sugar_pref = user_pref.sugar_preference
         meal_type = user_pref.meal_type
         
-        # Calculate similarity scores
+        # Calculate similarity scores - ensure proper type conversion
+        # First make sure spice and sugar levels are numeric
+        weather_foods['Spice_Level'] = pd.to_numeric(weather_foods['Spice_Level'], errors='coerce').fillna(0).astype(int)
+        weather_foods['Sugar_Level'] = pd.to_numeric(weather_foods['Sugar_Level'], errors='coerce').fillna(0).astype(int)
+        
+        # Now calculate differences
         weather_foods['spice_diff'] = abs(weather_foods['Spice_Level'] - spice_pref)
         weather_foods['sugar_diff'] = abs(weather_foods['Sugar_Level'] - sugar_pref)
         
@@ -79,6 +84,12 @@ def generate_initial_recommendations(user_id, weather_preference, user_preferenc
     if len(recommendations) < 5:
         # Add some general recommendations from foods table
         general_recs = df_food.sample(min(5, len(df_food)))
+        
+        # Ensure numeric columns are properly converted
+        general_recs['Food_ID'] = pd.to_numeric(general_recs['Food_ID'], errors='coerce').fillna(0).astype(int)
+        general_recs['Spice_Level'] = pd.to_numeric(general_recs['Spice_Level'], errors='coerce').fillna(0).astype(int)
+        general_recs['Sugar_Level'] = pd.to_numeric(general_recs['Sugar_Level'], errors='coerce').fillna(0).astype(int)
+        
         for _, row in general_recs.iterrows():
             if int(row['Food_ID']) not in [r['Food_ID'] for r in recommendations]:
                 food_item = {
@@ -290,6 +301,11 @@ def search_food(query, df_food=None):
         mask = mask | df_food['Describe'].str.contains(query, case=False, na=False)
     
     search_results = df_food[mask]
+    
+    # Ensure numeric columns are properly converted
+    search_results['Food_ID'] = pd.to_numeric(search_results['Food_ID'], errors='coerce').fillna(0).astype(int)
+    search_results['Spice_Level'] = pd.to_numeric(search_results['Spice_Level'], errors='coerce').fillna(0).astype(int)
+    search_results['Sugar_Level'] = pd.to_numeric(search_results['Sugar_Level'], errors='coerce').fillna(0).astype(int)
     
     # Convert to list of dictionaries
     results = []

@@ -37,14 +37,27 @@ def load_data():
     # Drop rows with NaN in critical columns
     df_ratings = df_ratings.dropna(subset=['User_ID', 'Food_ID', 'Rating'])
     
-    # Convert IDs to integers safely (after dropping NaN values)
-    df_ratings['User_ID'] = df_ratings['User_ID'].astype(int)
-    df_ratings['Food_ID'] = df_ratings['Food_ID'].astype(int)
-    df_ratings['Rating'] = df_ratings['Rating'].astype(int)
+    # Convert IDs and numeric columns to integers safely using pd.to_numeric with proper error handling
     
-    df_user['User_ID'] = df_user['User_ID'].astype(int)
-    df_food['Food_ID'] = df_food['Food_ID'].astype(int)
-    df_user_preferences['User_ID'] = df_user_preferences['User_ID'].astype(int)
+    # For ratings dataframe
+    df_ratings['User_ID'] = pd.to_numeric(df_ratings['User_ID'], errors='coerce').fillna(0).astype(int)
+    df_ratings['Food_ID'] = pd.to_numeric(df_ratings['Food_ID'], errors='coerce').fillna(0).astype(int)
+    df_ratings['Rating'] = pd.to_numeric(df_ratings['Rating'], errors='coerce').fillna(0).astype(int)
+    
+    # For user dataframe
+    df_user['User_ID'] = pd.to_numeric(df_user['User_ID'], errors='coerce').fillna(0).astype(int)
+    
+    # For food dataframe
+    df_food['Food_ID'] = pd.to_numeric(df_food['Food_ID'], errors='coerce').fillna(0).astype(int)
+    df_food['Spice_Level'] = pd.to_numeric(df_food['Spice_Level'], errors='coerce').fillna(0).astype(int)
+    df_food['Sugar_Level'] = pd.to_numeric(df_food['Sugar_Level'], errors='coerce').fillna(0).astype(int)
+    
+    # For user preferences dataframe
+    df_user_preferences['User_ID'] = pd.to_numeric(df_user_preferences['User_ID'], errors='coerce').fillna(0).astype(int)
+    if 'Spice_Preference' in df_user_preferences.columns:
+        df_user_preferences['Spice_Preference'] = pd.to_numeric(df_user_preferences['Spice_Preference'], errors='coerce').fillna(0).astype(int)
+    if 'Sugar_Preference' in df_user_preferences.columns:
+        df_user_preferences['Sugar_Preference'] = pd.to_numeric(df_user_preferences['Sugar_Preference'], errors='coerce').fillna(0).astype(int)
     
     return df_user, df_food, df_weather, df_user_preferences, df_ratings
 
@@ -65,6 +78,12 @@ def get_food_details(food_id):
     
     # If not in database, get from dataframe
     df_user, df_food, df_weather, df_user_preferences, df_ratings = load_data()
+    
+    # Ensure numeric columns are properly converted
+    df_food['Food_ID'] = pd.to_numeric(df_food['Food_ID'], errors='coerce').fillna(0).astype(int)
+    df_food['Spice_Level'] = pd.to_numeric(df_food['Spice_Level'], errors='coerce').fillna(0).astype(int)
+    df_food['Sugar_Level'] = pd.to_numeric(df_food['Sugar_Level'], errors='coerce').fillna(0).astype(int)
+    
     food_row = df_food[df_food['Food_ID'] == food_id]
     
     if not food_row.empty:
@@ -108,6 +127,14 @@ def get_user_preferences_dict(user_id):
     
     # If not in database, get from dataframe
     df_user, df_food, df_weather, df_user_preferences, df_ratings = load_data()
+    
+    # Ensure columns are properly converted to correct types
+    df_user_preferences['User_ID'] = pd.to_numeric(df_user_preferences['User_ID'], errors='coerce').fillna(0).astype(int)
+    if 'Spice_Preference' in df_user_preferences.columns:
+        df_user_preferences['Spice_Preference'] = pd.to_numeric(df_user_preferences['Spice_Preference'], errors='coerce').fillna(0).astype(int)
+    if 'Sugar_Preference' in df_user_preferences.columns:
+        df_user_preferences['Sugar_Preference'] = pd.to_numeric(df_user_preferences['Sugar_Preference'], errors='coerce').fillna(0).astype(int)
+    
     user_prefs = df_user_preferences[df_user_preferences['User_ID'] == user_id]
     
     prefs_dict = {}

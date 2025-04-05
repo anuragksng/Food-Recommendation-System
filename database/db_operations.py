@@ -28,54 +28,73 @@ def import_initial_data():
     try:
         # Import users
         df_user = pd.read_csv("attached_assets/user.csv")
+        
+        # Clean and convert data
+        df_user['User_ID'] = pd.to_numeric(df_user['User_ID'], errors='coerce').fillna(0).astype(int)
+        
         for _, row in df_user.iterrows():
             user = User(
                 id=int(row['User_ID']),
                 username=f"user{row['User_ID']}",  # Generate username
                 password=f"user{row['User_ID']}",  # Default password (should be hashed in a real app)
-                age=row['Age'],
-                gender=row['Gender'],
-                dietary_preference=row['Dietary_Preferences'],
+                age=row['Age'] if not pd.isna(row['Age']) else "Unknown",
+                gender=row['Gender'] if not pd.isna(row['Gender']) else "Other",
+                dietary_preference=row['Dietary_Preferences'] if not pd.isna(row['Dietary_Preferences']) else "None",
                 allergies=row['Allergies'] if not pd.isna(row['Allergies']) else "None"
             )
             session.add(user)
         
         # Import user preferences
         df_user_preferences = pd.read_csv("attached_assets/user_preferences.csv")
+        
+        # Clean and convert data
+        df_user_preferences['User_ID'] = pd.to_numeric(df_user_preferences['User_ID'], errors='coerce').fillna(0).astype(int)
+        df_user_preferences['Spice_Preference'] = pd.to_numeric(df_user_preferences['Spice_Preference'], errors='coerce').fillna(0).astype(int)
+        df_user_preferences['Sugar_Preference'] = pd.to_numeric(df_user_preferences['Sugar_Preference'], errors='coerce').fillna(0).astype(int)
+        
         for _, row in df_user_preferences.iterrows():
             pref = UserPreference(
                 user_id=int(row['User_ID']),
                 weather_type=row['Weather_Type'],
                 spice_preference=int(row['Spice_Preference']),
                 sugar_preference=int(row['Sugar_Preference']),
-                meal_type=row['Meal_Type'],
+                meal_type=row['Meal_Type'] if not pd.isna(row['Meal_Type']) else "Any",
                 recent_dislikes=row['Recent_Dislikes'] if not pd.isna(row['Recent_Dislikes']) else None
             )
             session.add(pref)
         
         # Import foods
         df_food = pd.read_csv("attached_assets/food.csv")
+        
+        # Clean and convert data
+        df_food['Food_ID'] = pd.to_numeric(df_food['Food_ID'], errors='coerce').fillna(0).astype(int)
+        df_food['Spice_Level'] = pd.to_numeric(df_food['Spice_Level'], errors='coerce').fillna(0).astype(int)
+        df_food['Sugar_Level'] = pd.to_numeric(df_food['Sugar_Level'], errors='coerce').fillna(0).astype(int)
+        
         for _, row in df_food.iterrows():
             food = Food(
                 id=int(row['Food_ID']),
                 dish_name=row['Dish_Name'],
-                cuisine_type=row['Cuisine_Type'],
-                veg_non=row['Veg_Non'],
+                cuisine_type=row['Cuisine_Type'] if not pd.isna(row['Cuisine_Type']) else "Other",
+                veg_non=row['Veg_Non'] if not pd.isna(row['Veg_Non']) else "Unknown",
                 description=row['Describe'] if not pd.isna(row['Describe']) else "No description available",
                 spice_level=int(row['Spice_Level']),
                 sugar_level=int(row['Sugar_Level']),
-                dish_category=row['Dish_Category'],
-                weather_type=row['Weather_Type']
+                dish_category=row['Dish_Category'] if not pd.isna(row['Dish_Category']) else "Other",
+                weather_type=row['Weather_Type'] if not pd.isna(row['Weather_Type']) else "Any"
             )
             session.add(food)
         
         # Import ratings
         df_ratings = pd.read_csv("attached_assets/ratings.csv")
+        
+        # Clean and convert data
+        df_ratings = df_ratings.dropna(subset=['User_ID', 'Food_ID', 'Rating'])
+        df_ratings['User_ID'] = pd.to_numeric(df_ratings['User_ID'], errors='coerce').fillna(0).astype(int)
+        df_ratings['Food_ID'] = pd.to_numeric(df_ratings['Food_ID'], errors='coerce').fillna(0).astype(int)
+        df_ratings['Rating'] = pd.to_numeric(df_ratings['Rating'], errors='coerce').fillna(0).astype(int)
+        
         for _, row in df_ratings.iterrows():
-            # Handle potential NaN values
-            if pd.isna(row['User_ID']) or pd.isna(row['Food_ID']) or pd.isna(row['Rating']):
-                continue
-                
             rating = Rating(
                 user_id=int(row['User_ID']),
                 food_id=int(row['Food_ID']),
@@ -92,7 +111,7 @@ def import_initial_data():
                 if not existing_weather:
                     weather = Weather(
                         weather_type=row['Weather_Type'],
-                        preferred_foods=row['Preferred_Foods']
+                        preferred_foods=row['Preferred_Foods'] if not pd.isna(row['Preferred_Foods']) else ""
                     )
                     session.add(weather)
         except Exception as e:
@@ -108,6 +127,17 @@ def import_initial_data():
             allergies="None"
         )
         session.add(test_user)
+        
+        # Add test user preferences for each weather type
+        for weather_type in ["Cold", "Hot", "Rainy", "Humid", "Windy"]:
+            test_pref = UserPreference(
+                user_id=test_user.id,
+                weather_type=weather_type,
+                spice_preference=3,  # Medium spice
+                sugar_preference=3,  # Medium sugar
+                meal_type="Any"
+            )
+            session.add(test_pref)
         
         # Commit changes to the database
         session.commit()
