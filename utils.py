@@ -9,12 +9,14 @@ def display_food_item(food_item, index):
         food_item: Dictionary containing food item details
         index: Index of the food item for unique keys
     """
-    # Determine the food type and set appropriate styling
+    # Get the food type (use Type if available, otherwise fall back to Veg_Non)
     type_value = food_item.get('Type', food_item.get('Veg_Non', 'Unknown'))
+    
+    # Set styling based on type but keep the original value
     if 'vegetarian' in type_value.lower():
-        type_html = '<span style="color: green; font-weight: bold;">🌿 Vegetarian</span>'
+        type_html = f'<span style="color: green; font-weight: bold;">{type_value}</span>'
     else:
-        type_html = '<span style="color: #b22222; font-weight: bold;">🍖 Non-Vegetarian</span>'
+        type_html = f'<span style="color: #b22222; font-weight: bold;">{type_value}</span>'
     
     # Create a bordered box for each food item
     with st.container():
@@ -67,11 +69,11 @@ def display_food_details(food_item):
         # Use Type if available, otherwise fall back to Veg_Non
         type_value = food_item.get('Type', food_item.get('Veg_Non', 'Unknown'))
         
-        # Style the type display
+        # Style the type display but keep the original value
         if 'vegetarian' in type_value.lower():
-            st.markdown("**Type:** <span style='color: green; font-weight: bold;'>🌿 Vegetarian</span>", unsafe_allow_html=True)
+            st.markdown(f"**Type:** <span style='color: green; font-weight: bold;'>{type_value}</span>", unsafe_allow_html=True)
         else:
-            st.markdown("**Type:** <span style='color: #b22222; font-weight: bold;'>🍖 Non-Vegetarian</span>", unsafe_allow_html=True)
+            st.markdown(f"**Type:** <span style='color: #b22222; font-weight: bold;'>{type_value}</span>", unsafe_allow_html=True)
             
         st.write(f"**Category:** {food_item['Dish_Category']}")
         st.write(f"**Best Weather:** {food_item['Weather_Type']}")
