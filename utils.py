@@ -1,7 +1,5 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-import random
+from database.db_operations import get_user_by_username
 
 def display_food_item(food_item, index):
     """
@@ -11,66 +9,38 @@ def display_food_item(food_item, index):
         food_item: Dictionary containing food item details
         index: Index of the food item for unique keys
     """
-    st.write(f"### {food_item['Dish_Name']}")
+    # Create a bordered box for each food item
+    with st.container():
+        st.markdown(f"""
+        <div style="padding: 15px; border-radius: 10px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; background-color: white;">
+            <h3 style="color: #1E88E5;">{food_item['Dish_Name']}</h3>
+            <p><b>Cuisine:</b> {food_item['Cuisine_Type']}</p>
+            <p><b>Type:</b> {food_item['Veg_Non']}</p>
+            <p><b>Category:</b> {food_item['Dish_Category']}</p>
+            <p>
+                <span style="display: inline-block; width: 150px;">
+                    <b>Spice Level:</b> {'🌶️' * food_item['Spice_Level']}
+                </span>
+                <span style="display: inline-block; width: 150px;">
+                    <b>Sugar Level:</b> {'🍬' * food_item['Sugar_Level']}
+                </span>
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Add action buttons
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button(f"👍 Like", key=f"like_{index}_{food_item['Food_ID']}"):
+                return "like"
+        with col2:
+            if st.button(f"👎 Dislike", key=f"dislike_{index}_{food_item['Food_ID']}"):
+                return "dislike"
+        with col3:
+            if st.button(f"ℹ️ Details", key=f"details_{index}_{food_item['Food_ID']}"):
+                return "details"
     
-    # Show basic food information
-    st.write(f"**Cuisine:** {food_item['Cuisine_Type']}")
-    st.write(f"**Type:** {food_item['Veg_Non']}")
-    
-    # Display spice and sugar levels with progress bars
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write("**Spice Level:**")
-        st.progress(food_item['Spice_Level'] / 10)
-    
-    with col2:
-        st.write("**Sugar Level:**")
-        st.progress(food_item['Sugar_Level'] / 10)
-    
-    # Like/Dislike buttons
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button(f"👍 Like", key=f"like_{index}_{food_item['Food_ID']}"):
-            if food_item['Food_ID'] not in st.session_state.liked_foods:
-                st.session_state.liked_foods.append(food_item['Food_ID'])
-                if food_item['Food_ID'] in st.session_state.disliked_foods:
-                    st.session_state.disliked_foods.remove(food_item['Food_ID'])
-                # Update recommendations
-                from recommender import update_recommendations
-                st.session_state.personalized_recommendations = update_recommendations(
-                    st.session_state.user_id,
-                    st.session_state.weather_preference,
-                    st.session_state.liked_foods,
-                    st.session_state.disliked_foods,
-                    st.session_state.search_history
-                )
-                st.success(f"You liked {food_item['Dish_Name']}!")
-                st.rerun()
-    
-    with col2:
-        if st.button(f"👎 Dislike", key=f"dislike_{index}_{food_item['Food_ID']}"):
-            if food_item['Food_ID'] not in st.session_state.disliked_foods:
-                st.session_state.disliked_foods.append(food_item['Food_ID'])
-                if food_item['Food_ID'] in st.session_state.liked_foods:
-                    st.session_state.liked_foods.remove(food_item['Food_ID'])
-                # Update recommendations
-                from recommender import update_recommendations
-                st.session_state.personalized_recommendations = update_recommendations(
-                    st.session_state.user_id,
-                    st.session_state.weather_preference,
-                    st.session_state.liked_foods,
-                    st.session_state.disliked_foods,
-                    st.session_state.search_history
-                )
-                st.error(f"You disliked {food_item['Dish_Name']}!")
-                st.rerun()
-    
-    # View details button
-    if st.button(f"View Details", key=f"details_{index}_{food_item['Food_ID']}"):
-        st.session_state.selected_food = food_item
-        display_food_details(food_item)
-    
-    st.markdown("---")
+    return None
 
 def display_food_details(food_item):
     """
@@ -79,79 +49,32 @@ def display_food_details(food_item):
     Args:
         food_item: Dictionary containing food item details
     """
-    st.write(f"## {food_item['Dish_Name']}")
+    st.title(food_item['Dish_Name'])
     
-    # Basic information
+    # Display main info
     col1, col2 = st.columns(2)
     
     with col1:
         st.write(f"**Cuisine:** {food_item['Cuisine_Type']}")
-        st.write(f"**Category:** {food_item['Dish_Category']}")
         st.write(f"**Type:** {food_item['Veg_Non']}")
-        st.write(f"**Ideal Weather:** {food_item['Weather_Type']}")
+        st.write(f"**Category:** {food_item['Dish_Category']}")
+        st.write(f"**Best Weather:** {food_item['Weather_Type']}")
     
     with col2:
-        # Display spice and sugar levels with progress bars
         st.write("**Spice Level:**")
         st.progress(food_item['Spice_Level'] / 10)
-        
         st.write("**Sugar Level:**")
         st.progress(food_item['Sugar_Level'] / 10)
     
-    # Description
-    st.write("### Description")
-    # Clean up HTML tags from description
-    description = food_item['Describe']
-    description = description.replace('<b>', '**').replace('</b>', '**')
-    description = description.replace('...[Truncated]', '...')
-    st.write(description)
+    # Display description
+    st.subheader("Description")
+    st.markdown(food_item['Describe'], unsafe_allow_html=True)
     
-    # Like/Dislike buttons
-    col1, col2 = st.columns(2)
+    # Add a back button
+    if st.button("← Back to Recommendations"):
+        return True
     
-    with col1:
-        liked = food_item['Food_ID'] in st.session_state.liked_foods
-        button_text = "👍 Liked" if liked else "👍 Like"
-        
-        if st.button(button_text, key=f"detail_like_{food_item['Food_ID']}"):
-            if not liked:
-                st.session_state.liked_foods.append(food_item['Food_ID'])
-                if food_item['Food_ID'] in st.session_state.disliked_foods:
-                    st.session_state.disliked_foods.remove(food_item['Food_ID'])
-                # Update recommendations
-                from recommender import update_recommendations
-                st.session_state.personalized_recommendations = update_recommendations(
-                    st.session_state.user_id,
-                    st.session_state.weather_preference,
-                    st.session_state.liked_foods,
-                    st.session_state.disliked_foods,
-                    st.session_state.search_history
-                )
-                st.success(f"You liked {food_item['Dish_Name']}!")
-                st.rerun()
-    
-    with col2:
-        disliked = food_item['Food_ID'] in st.session_state.disliked_foods
-        button_text = "👎 Disliked" if disliked else "👎 Dislike"
-        
-        if st.button(button_text, key=f"detail_dislike_{food_item['Food_ID']}"):
-            if not disliked:
-                st.session_state.disliked_foods.append(food_item['Food_ID'])
-                if food_item['Food_ID'] in st.session_state.liked_foods:
-                    st.session_state.liked_foods.remove(food_item['Food_ID'])
-                # Update recommendations
-                from recommender import update_recommendations
-                st.session_state.personalized_recommendations = update_recommendations(
-                    st.session_state.user_id,
-                    st.session_state.weather_preference,
-                    st.session_state.liked_foods,
-                    st.session_state.disliked_foods,
-                    st.session_state.search_history
-                )
-                st.error(f"You disliked {food_item['Dish_Name']}!")
-                st.rerun()
-    
-    st.markdown("---")
+    return False
 
 def get_user_name(user_id):
     """
@@ -163,9 +86,10 @@ def get_user_name(user_id):
     Returns:
         str: The username (or default if not found)
     """
-    # In a real app, this would query a user database
-    # For this demo, we'll use a convention of "User {ID}"
-    return f"User {user_id}"
+    user = get_user_by_username(user_id)
+    if user:
+        return user.username
+    return f"User_{user_id}"
 
 def format_allergies(allergies_str):
     """
@@ -177,14 +101,8 @@ def format_allergies(allergies_str):
     Returns:
         str: Formatted allergies string
     """
-    if not allergies_str or allergies_str == 'None':
+    if not allergies_str or allergies_str.lower() == "none":
         return "None"
     
-    # Split by comma and remove empty strings
-    allergies = [allergy.strip() for allergy in allergies_str.split(',') if allergy.strip()]
-    
-    # Remove 'None' entries if other allergies are present
-    if len(allergies) > 1 and 'None' in allergies:
-        allergies.remove('None')
-    
+    allergies = [a.strip() for a in allergies_str.split(',')]
     return ", ".join(allergies)

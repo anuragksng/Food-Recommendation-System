@@ -1,7 +1,9 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
 import os
+import pandas as pd
+import streamlit as st
+from database.db_operations import (get_food_by_id, get_foods_by_ids, convert_db_food_to_dict,
+                                   get_user_preferences, get_user_by_username, init_db,
+                                   import_initial_data)
 
 @st.cache_data
 def load_data():
@@ -11,48 +13,38 @@ def load_data():
     Returns:
         Tuple of dataframes: (df_user, df_food, df_weather, df_user_preferences, df_ratings)
     """
-    # Define file paths
-    user_csv = "attached_assets/user.csv"
-    food_csv = "attached_assets/food.csv"
-    weather_csv = "attached_assets/weather.csv"
-    user_preferences_csv = "attached_assets/user_preferences.csv"
-    ratings_csv = "attached_assets/ratings.csv"
+    # Initialize the database and import data if needed
+    init_db()
+    import_initial_data()
     
-    # Load the datasets
-    df_user = pd.read_csv(user_csv)
-    df_food = pd.read_csv(food_csv)
-    df_weather = pd.read_csv(weather_csv)
-    df_user_preferences = pd.read_csv(user_preferences_csv)
-    df_ratings = pd.read_csv(ratings_csv)
+    # Load user data
+    df_user = pd.read_csv("attached_assets/user.csv")
     
-    # Clean and preprocess the data
+    # Load food data
+    df_food = pd.read_csv("attached_assets/food.csv")
     
-    # Handle missing values in food descriptions
-    df_food['Describe'] = df_food['Describe'].fillna('No description available.')
+    # Load weather data
+    df_weather = pd.read_csv("attached_assets/weather.csv")
     
-    # Convert string representations to appropriate data types where needed
-    df_food['Spice_Level'] = pd.to_numeric(df_food['Spice_Level'], errors='coerce').fillna(0).astype(int)
-    df_food['Sugar_Level'] = pd.to_numeric(df_food['Sugar_Level'], errors='coerce').fillna(0).astype(int)
+    # Load user preferences
+    df_user_preferences = pd.read_csv("attached_assets/user_preferences.csv")
     
-    # Ensure all Food_ID fields are integers
-    df_food['Food_ID'] = df_food['Food_ID'].astype(int)
-    # Fill NaN values in the Food_ID column before converting to integer
-    df_ratings['Food_ID'] = pd.to_numeric(df_ratings['Food_ID'], errors='coerce').fillna(0).astype(int)
+    # Load ratings data
+    df_ratings = pd.read_csv("attached_assets/ratings.csv")
     
-    # Ensure all User_ID fields are integers
+    # Clean and preprocess data to avoid NaN conversion errors
+    
+    # Drop rows with NaN in critical columns
+    df_ratings = df_ratings.dropna(subset=['User_ID', 'Food_ID', 'Rating'])
+    
+    # Convert IDs to integers safely (after dropping NaN values)
+    df_ratings['User_ID'] = df_ratings['User_ID'].astype(int)
+    df_ratings['Food_ID'] = df_ratings['Food_ID'].astype(int)
+    df_ratings['Rating'] = df_ratings['Rating'].astype(int)
+    
     df_user['User_ID'] = df_user['User_ID'].astype(int)
+    df_food['Food_ID'] = df_food['Food_ID'].astype(int)
     df_user_preferences['User_ID'] = df_user_preferences['User_ID'].astype(int)
-    # Fill NaN values in the User_ID column before converting to integer
-    df_ratings['User_ID'] = pd.to_numeric(df_ratings['User_ID'], errors='coerce').fillna(0).astype(int)
-    
-    # Ensure Rating column is also handled properly
-    df_ratings['Rating'] = pd.to_numeric(df_ratings['Rating'], errors='coerce').fillna(0).astype(int)
-    
-    # Clean allergies data (replace NaN with "None")
-    df_user['Allergies'] = df_user['Allergies'].fillna('None')
-    
-    # Parse the preferred foods in weather dataset
-    df_weather['Preferred_Foods'] = df_weather['Preferred_Foods'].str.split(', ')
     
     return df_user, df_food, df_weather, df_user_preferences, df_ratings
 
@@ -66,16 +58,32 @@ def get_food_details(food_id):
     Returns:
         dict: Food item details
     """
-    _, df_food, _, _, _ = load_data()
+    # First try to get from database
+    food = get_food_by_id(food_id)
+    if food:
+        return convert_db_food_to_dict(food)
     
-    food_item = df_food[df_food['Food_ID'] == food_id]
+    # If not in database, get from dataframe
+    df_user, df_food, df_weather, df_user_preferences, df_ratings = load_data()
+    food_row = df_food[df_food['Food_ID'] == food_id]
     
-    if food_item.empty:
-        return None
+    if not food_row.empty:
+        food_row = food_row.iloc[0]
+        return {
+            'Food_ID': int(food_row['Food_ID']),
+            'Dish_Name': food_row['Dish_Name'],
+            'Cuisine_Type': food_row['Cuisine_Type'],
+            'Veg_Non': food_row['Veg_Non'],
+            'Describe': food_row['Describe'] if not pd.isna(food_row['Describe']) else "No description available",
+            'Spice_Level': int(food_row['Spice_Level']),
+            'Sugar_Level': int(food_row['Sugar_Level']),
+            'Dish_Category': food_row['Dish_Category'],
+            'Weather_Type': food_row['Weather_Type']
+        }
     
-    return food_item.iloc[0].to_dict()
+    return None
 
-def get_user_preferences(user_id):
+def get_user_preferences_dict(user_id):
     """
     Get the preferences of a specific user by ID
     
@@ -85,32 +93,32 @@ def get_user_preferences(user_id):
     Returns:
         dict: User preferences
     """
-    df_user, _, _, df_user_preferences, _ = load_data()
+    # Try to get from database
+    preferences = get_user_preferences(user_id)
+    if preferences:
+        # Convert to dict format
+        prefs_dict = {}
+        for pref in preferences:
+            prefs_dict[pref.weather_type] = {
+                'spice': pref.spice_preference,
+                'sugar': pref.sugar_preference,
+                'meal_type': pref.meal_type
+            }
+        return prefs_dict
     
-    user_info = df_user[df_user['User_ID'] == user_id]
+    # If not in database, get from dataframe
+    df_user, df_food, df_weather, df_user_preferences, df_ratings = load_data()
     user_prefs = df_user_preferences[df_user_preferences['User_ID'] == user_id]
     
-    if user_info.empty:
-        return None
-    
-    # Compile user preferences
-    preferences = {
-        'dietary': user_info.iloc[0]['Dietary_Preferences'],
-        'age': user_info.iloc[0]['Age'],
-        'gender': user_info.iloc[0]['Gender'],
-        'allergies': user_info.iloc[0]['Allergies'],
-        'weather_preferences': {}
-    }
-    
-    # Add weather-specific preferences
+    prefs_dict = {}
     for _, row in user_prefs.iterrows():
-        preferences['weather_preferences'][row['Weather_Type']] = {
-            'spice': row['Spice_Preference'],
-            'sugar': row['Sugar_Preference'],
+        prefs_dict[row['Weather_Type']] = {
+            'spice': int(row['Spice_Preference']),
+            'sugar': int(row['Sugar_Preference']),
             'meal_type': row['Meal_Type']
         }
     
-    return preferences
+    return prefs_dict
 
 def get_user_ratings(user_id):
     """
@@ -122,8 +130,5 @@ def get_user_ratings(user_id):
     Returns:
         DataFrame: User ratings
     """
-    _, _, _, _, df_ratings = load_data()
-    
-    user_ratings = df_ratings[df_ratings['User_ID'] == user_id]
-    
-    return user_ratings
+    df_user, df_food, df_weather, df_user_preferences, df_ratings = load_data()
+    return df_ratings[df_ratings['User_ID'] == user_id]

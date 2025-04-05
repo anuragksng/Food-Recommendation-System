@@ -1,144 +1,132 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-import random
-from data_loader import load_data
-from recommender import generate_initial_recommendations
+from database.db_operations import get_user_by_username, create_user
 
 def login():
     """
     Handle user login functionality
     """
-    st.subheader("Login to your account")
+    st.title("Login")
     
-    username = st.text_input("Username", key="login_username")
-    password = st.text_input("Password", type="password", key="login_password")
+    # Create input fields
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
     
-    login_button = st.button("Login")
-    
-    if login_button:
-        if not username or not password:
-            st.error("Please enter both username and password.")
-            return
-        
-        # Simulate checking credentials against a database
-        # In a real app, you would check against a secure database with hashed passwords
-        valid_login, user_data = check_credentials(username, password)
-        
-        if valid_login:
-            # Set session state variables for the authenticated user
-            st.session_state.authenticated = True
-            st.session_state.username = username
-            st.session_state.user_id = user_data['user_id']
-            
-            # Load user preferences from data
-            df_user, _, _, df_user_preferences, _ = load_data()
-            
-            # Get user preferences
-            user_info = df_user[df_user['User_ID'] == st.session_state.user_id].iloc[0]
-            user_prefs = df_user_preferences[df_user_preferences['User_ID'] == st.session_state.user_id]
-            
-            # Store user preferences in session state
-            st.session_state.user_preferences = {
-                'dietary': user_info['Dietary_Preferences'],
-                'age': user_info['Age'],
-                'gender': user_info['Gender'],
-                'allergies': user_info['Allergies'],
-                'weather_preferences': {}
-            }
-            
-            # Add weather-specific preferences
-            for _, row in user_prefs.iterrows():
-                st.session_state.user_preferences['weather_preferences'][row['Weather_Type']] = {
-                    'spice': row['Spice_Preference'],
-                    'sugar': row['Sugar_Preference'],
-                    'meal_type': row['Meal_Type']
-                }
-            
-            # Generate initial recommendations
-            st.session_state.personalized_recommendations = generate_initial_recommendations(
-                st.session_state.user_id,
-                st.session_state.weather_preference,
-                st.session_state.user_preferences
-            )
-            
-            st.success("Login successful!")
+    # Create login button
+    if st.button("Login"):
+        # Check credentials
+        if check_credentials(username, password):
+            # Set session state variables
+            user = get_user_by_username(username)
+            st.session_state['logged_in'] = True
+            st.session_state['username'] = username
+            st.session_state['user_id'] = user.id
+            st.success(f"Welcome back, {username}!")
             st.rerun()
         else:
-            st.error("Invalid username or password. Please try again.")
+            st.error("Invalid username or password")
 
 def signup():
     """
     Handle user signup functionality
     """
-    st.subheader("Create a new account")
+    st.title("Sign Up")
     
+    # Personal information
     with st.form(key="signup_form"):
-        username = st.text_input("Username", key="signup_username")
-        password = st.text_input("Password", type="password", key="signup_password")
-        confirm_password = st.text_input("Confirm Password", type="password", key="confirm_password")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        confirm_password = st.text_input("Confirm Password", type="password")
         
-        # User preferences
-        st.subheader("Your Preferences")
-        
+        # Demographics
         age_options = ["Child", "Teen", "Adult", "Senior"]
         age = st.selectbox("Age Group", age_options)
         
         gender_options = ["Male", "Female", "Other"]
         gender = st.selectbox("Gender", gender_options)
         
-        dietary_options = ["Non-Vegetarian", "Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Keto", "Paleo"]
-        dietary_preference = st.selectbox("Dietary Preference", dietary_options)
+        # Dietary preferences
+        diet_options = ["Vegetarian", "Non-Vegetarian", "Vegan", "Gluten-Free", "Keto", "Paleo"]
+        dietary_preference = st.selectbox("Dietary Preference", diet_options)
         
-        allergens = st.multiselect(
-            "Allergies (if any)",
-            ["None", "Dairy", "Gluten", "Nuts", "Eggs", "Soy", "Shellfish"]
-        )
+        allergies = st.text_input("Allergies (comma-separated, leave empty if none)")
         
-        # Weather preferences
-        st.subheader("Weather Preferences")
+        # Weather-based preferences
+        st.subheader("Preferences by Weather")
         
-        weather_types = ['Cold', 'Hot', 'Rainy', 'Humid', 'Windy']
-        
-        # Create tabs for each weather type
-        tabs = st.tabs(weather_types)
-        
+        # Create a dictionary to store preferences
         weather_preferences = {}
         
-        for i, weather in enumerate(weather_types):
-            with tabs[i]:
-                meal_options = ["Breakfast", "Lunch", "Dinner"]
-                weather_preferences[weather] = {
-                    'meal_type': st.selectbox(f"Preferred Meal Type for {weather} Weather", meal_options, key=f"meal_{weather}"),
-                    'spice': st.slider(f"Spice Preference for {weather} Weather (0-10)", 0, 10, 5, key=f"spice_{weather}"),
-                    'sugar': st.slider(f"Sugar Preference for {weather} Weather (0-10)", 0, 10, 5, key=f"sugar_{weather}")
-                }
+        # Cold weather preferences
+        st.write("Cold Weather")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            cold_spice = st.slider("Spice Preference (Cold)", 0, 10, 5)
+        with col2:
+            cold_sugar = st.slider("Sugar Preference (Cold)", 0, 10, 5)
+        with col3:
+            cold_meal = st.selectbox("Preferred Meal (Cold)", ["Breakfast", "Lunch", "Dinner", "Snack"])
+        weather_preferences["Cold"] = {"spice": cold_spice, "sugar": cold_sugar, "meal_type": cold_meal}
         
-        signup_button = st.form_submit_button("Sign Up")
+        # Hot weather preferences
+        st.write("Hot Weather")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            hot_spice = st.slider("Spice Preference (Hot)", 0, 10, 5)
+        with col2:
+            hot_sugar = st.slider("Sugar Preference (Hot)", 0, 10, 5)
+        with col3:
+            hot_meal = st.selectbox("Preferred Meal (Hot)", ["Breakfast", "Lunch", "Dinner", "Snack"])
+        weather_preferences["Hot"] = {"spice": hot_spice, "sugar": hot_sugar, "meal_type": hot_meal}
         
-        if signup_button:
+        # Rainy weather preferences
+        st.write("Rainy Weather")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            rainy_spice = st.slider("Spice Preference (Rainy)", 0, 10, 5)
+        with col2:
+            rainy_sugar = st.slider("Sugar Preference (Rainy)", 0, 10, 5)
+        with col3:
+            rainy_meal = st.selectbox("Preferred Meal (Rainy)", ["Breakfast", "Lunch", "Dinner", "Snack"])
+        weather_preferences["Rainy"] = {"spice": rainy_spice, "sugar": rainy_sugar, "meal_type": rainy_meal}
+        
+        # Humid weather preferences
+        st.write("Humid Weather")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            humid_spice = st.slider("Spice Preference (Humid)", 0, 10, 5)
+        with col2:
+            humid_sugar = st.slider("Sugar Preference (Humid)", 0, 10, 5)
+        with col3:
+            humid_meal = st.selectbox("Preferred Meal (Humid)", ["Breakfast", "Lunch", "Dinner", "Snack"])
+        weather_preferences["Humid"] = {"spice": humid_spice, "sugar": humid_sugar, "meal_type": humid_meal}
+        
+        submit_button = st.form_submit_button("Sign Up")
+        
+        if submit_button:
+            # Validate input
             if not username or not password:
-                st.error("Please enter both username and password.")
+                st.error("Username and password are required")
                 return
-            
+                
             if password != confirm_password:
-                st.error("Passwords do not match.")
+                st.error("Passwords do not match")
                 return
-            
-            # Check if username already exists
+                
             if username_exists(username):
-                st.error("Username already exists. Please choose a different one.")
+                st.error("Username already exists")
                 return
+                
+            # Create user
+            user_id = create_new_user(username, password, age, gender, dietary_preference, allergies, weather_preferences)
             
-            # Create new user
-            new_user_id = create_user(username, password, age, gender, dietary_preference, allergens, weather_preferences)
-            
-            if new_user_id:
-                st.success("Account created successfully! Please login.")
-                # Clear the form
+            if user_id:
+                st.success("Account created successfully! You can now log in.")
+                st.session_state['logged_in'] = True
+                st.session_state['username'] = username
+                st.session_state['user_id'] = user_id
                 st.rerun()
             else:
-                st.error("Error creating account. Please try again.")
+                st.error("Failed to create account")
 
 def check_credentials(username, password):
     """
@@ -147,91 +135,40 @@ def check_credentials(username, password):
     In a real app, this would query a database with properly hashed passwords
     For this demo, we'll simulate the verification process
     """
-    # Simulate a database check
-    # In a real app, you would check against a database with hashed passwords
+    if not username or not password:
+        return False
+        
+    user = get_user_by_username(username)
     
-    # Let's assume we have a simple dictionary mapping usernames to user data
-    # This is just for demonstration - in a real app, use proper authentication methods
-    
-    # For demo purposes, we'll consider the first 20 users from df_user as existing accounts
-    # with password same as username for simplicity
-    df_user, _, _, _, _ = load_data()
-    
-    valid_users = {}
-    for i in range(min(20, len(df_user))):
-        user_row = df_user.iloc[i]
-        user_id = user_row['User_ID']
-        # For simplicity, username is "user{user_id}" and password is the same
-        username_key = f"user{user_id}"
-        valid_users[username_key] = {
-            'password': username_key,  # In a real app, this would be a hashed password
-            'user_id': user_id
-        }
-    
-    # Add a default test account
-    valid_users['test'] = {
-        'password': 'test',
-        'user_id': 1
-    }
-    
-    if username in valid_users and valid_users[username]['password'] == password:
-        return True, valid_users[username]
-    
-    return False, None
+    if user and user.password == password:
+        return True
+        
+    return False
 
 def username_exists(username):
     """
     Check if a username already exists
     """
-    # For demo purposes
-    # In a real app, this would query a database
-    df_user, _, _, _, _ = load_data()
-    
-    valid_users = [f"user{user_id}" for user_id in df_user['User_ID'].unique()[:20]]
-    valid_users.append('test')
-    
-    return username in valid_users
+    user = get_user_by_username(username)
+    return user is not None
 
-def create_user(username, password, age, gender, dietary_preference, allergies, weather_preferences):
+def create_new_user(username, password, age, gender, dietary_preference, allergies, weather_preferences):
     """
     Create a new user with the provided information
     
     In a real app, this would add an entry to a database with a properly hashed password
     For this demo, we'll simulate the process
     """
-    # Simulate creating a user in the database
-    # For demo purposes, we'll generate a random user ID
-    # In a real app, this would be handled by the database
+    # Format allergies string
+    allergies_str = allergies if allergies else "None"
     
-    df_user, _, _, _, _ = load_data()
+    # Create user in database
+    user_id = create_user(username, password, age, gender, dietary_preference, allergies_str, weather_preferences)
     
-    # Generate a new user ID (for demo purposes, just use max + 1)
-    new_user_id = df_user['User_ID'].max() + 1
-    
-    # Format allergies for storage
-    allergies_str = ", ".join(allergies) if allergies else "None"
-    
-    # In a real app, this information would be stored in a database
-    # For this demo, we'll just keep it in the session state
-    
-    # Store user information
-    if 'users' not in st.session_state:
-        st.session_state.users = {}
-    
-    st.session_state.users[username] = {
-        'password': password,  # In a real app, this would be hashed
-        'user_id': new_user_id,
-        'age': age,
-        'gender': gender,
-        'dietary_preference': dietary_preference,
-        'allergies': allergies_str,
-        'weather_preferences': weather_preferences
-    }
-    
-    return new_user_id
+    return user_id
 
 def check_authentication():
     """
     Check if the user is authenticated
     """
-    return st.session_state.authenticated if 'authenticated' in st.session_state else False
+    return 'logged_in' in st.session_state and st.session_state['logged_in']
