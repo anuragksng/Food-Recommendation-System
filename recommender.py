@@ -493,61 +493,39 @@ def search_food(query, df_food=None, user_id=None):
     if not query or query.strip() == "":
         return []
     
-    # Get user's dietary preference if user_id is provided
+    # Get user's dietary preference if user_id is provided (for logging only)
     dietary_preference = None
     if user_id:
         user_info = get_user_by_username_by_id(user_id)
         if user_info:
             dietary_preference = user_info.get('dietary_preference')
     
-    print(f"User dietary preference: {dietary_preference}")  # Debug log
+    print(f"User dietary preference: {dietary_preference}, but showing all search results")  # Debug log
     
     # Search in database first
     db_results = search_foods(query)
     if db_results:
+        # Convert all results to dictionary format, regardless of dietary preference
         results = [convert_db_food_to_dict(food) for food in db_results]
         
-        # Apply strict dietary preference filtering if available
-        if dietary_preference:
-            # DOUBLE-CHECK: First use the new helper function
-            filtered_results = []
-            for item in results:
-                if is_food_compatible_with_preference(item, dietary_preference):
-                    filtered_results.append(item)
-                    
-            # Then also apply the main filter function as a backup
-            filtered_results = filter_by_dietary_preference(filtered_results, dietary_preference)
-            
-            # FINAL SAFEGUARD: Apply strict food type filtering 
-            filtered_results = apply_strict_filtering(filtered_results, dietary_preference)
-            
-            # Log filtering results
-            print(f"Search filtered foods from {len(results)} to {len(filtered_results)} based on {dietary_preference} preference")
-            
-            return filtered_results
+        # Make sure each item has a Type field for display purposes
+        for item in results:
+            if 'Type' not in item and 'Veg_Non' in item:
+                # Standardize Veg_Non to Type field
+                veg_status = str(item['Veg_Non']).lower()
+                item['Type'] = 'NonVegetarian' if 'non' in veg_status else 'Vegetarian'
+                
+        # No filtering - return all results so users can choose and the model can learn
+        print(f"Returning all {len(results)} search results without dietary filtering")
         return results
     
     # If not in database or no results, search in dataframe
     if df_food is None:
         df_user, df_food, df_weather, df_user_preferences, df_ratings = load_data()
     
-    # Apply pre-filtering for dietary preference BEFORE search if applicable
-    if dietary_preference and dietary_preference.lower() in ['vegetarian', 'vegan']:
-        # Pre-filter the dataframe based on dietary preferences
-        # This ensures we don't even search in non-matching foods
-        vegStatus = ['veg', 'vegetarian'] if dietary_preference.lower() == 'vegetarian' else ['vegan']
-        
-        # Create a copy to avoid warnings
-        df_food_filtered = df_food.copy()
-        
-        # Perform case-insensitive filtering
-        mask = df_food_filtered['Veg_Non'].str.lower().isin(vegStatus)
-        df_food_filtered = df_food_filtered[mask]
-        
-        # If we have results after filtering, use this dataframe instead
-        if not df_food_filtered.empty:
-            df_food = df_food_filtered
-            print(f"Pre-filtered food dataframe to {len(df_food)} foods matching {dietary_preference}")
+    # NO PRE-FILTERING: Show all food items in search results regardless of dietary preference
+    # This allows users to see all options and the model can learn from their choices
+    print(f"Using all {len(df_food)} foods without pre-filtering by dietary preference")
     
     # Search in dish name, cuisine type, and description
     mask = (
@@ -622,23 +600,7 @@ def search_food(query, df_food=None, user_id=None):
             food_item['Type'] = 'NonVegetarian' if 'non' in veg_status else 'Vegetarian'
         results.append(food_item)
     
-    # Apply final dietary preference filtering
-    if dietary_preference:
-        # DOUBLE-CHECK: First use the individual item checker
-        filtered_results = []
-        for item in results:
-            if is_food_compatible_with_preference(item, dietary_preference):
-                filtered_results.append(item)
-                
-        # Then also apply the main filter function as a backup
-        filtered_results = filter_by_dietary_preference(filtered_results, dietary_preference)
-        
-        # FINAL SAFEGUARD: Apply strict food type filtering 
-        filtered_results = apply_strict_filtering(filtered_results, dietary_preference)
-        
-        # Log filtering results
-        print(f"CSV search filtered foods from {len(results)} to {len(filtered_results)} based on {dietary_preference} preference")
-        
-        return filtered_results
-        
+    # No filtering in search results, regardless of dietary preference
+    # This allows users to see all options and the model can learn from their choices
+    print(f"Returning all {len(results)} CSV search results without dietary filtering")
     return results

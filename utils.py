@@ -9,13 +9,20 @@ def display_food_item(food_item, index):
         food_item: Dictionary containing food item details
         index: Index of the food item for unique keys
     """
+    # Determine the food type and set appropriate styling
+    type_value = food_item.get('Type', food_item.get('Veg_Non', 'Unknown'))
+    if 'vegetarian' in type_value.lower():
+        type_html = '<span style="color: green; font-weight: bold;">🌿 Vegetarian</span>'
+    else:
+        type_html = '<span style="color: #b22222; font-weight: bold;">🍖 Non-Vegetarian</span>'
+    
     # Create a bordered box for each food item
     with st.container():
         st.markdown(f"""
         <div style="padding: 15px; border-radius: 10px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; background-color: white;">
             <h3 style="color: #1E88E5;">{food_item['Dish_Name']}</h3>
             <p><b>Cuisine:</b> {food_item['Cuisine_Type']}</p>
-            <p><b>Type:</b> {food_item.get('Type', food_item.get('Veg_Non', 'Unknown'))}</p>
+            <p><b>Type:</b> {type_html}</p>
             <p><b>Category:</b> {food_item['Dish_Category']}</p>
             <p>
                 <span style="display: inline-block; width: 150px;">
@@ -56,9 +63,16 @@ def display_food_details(food_item):
     
     with col1:
         st.write(f"**Cuisine:** {food_item['Cuisine_Type']}")
+        
         # Use Type if available, otherwise fall back to Veg_Non
         type_value = food_item.get('Type', food_item.get('Veg_Non', 'Unknown'))
-        st.write(f"**Type:** {type_value}")
+        
+        # Style the type display
+        if 'vegetarian' in type_value.lower():
+            st.markdown("**Type:** <span style='color: green; font-weight: bold;'>🌿 Vegetarian</span>", unsafe_allow_html=True)
+        else:
+            st.markdown("**Type:** <span style='color: #b22222; font-weight: bold;'>🍖 Non-Vegetarian</span>", unsafe_allow_html=True)
+            
         st.write(f"**Category:** {food_item['Dish_Category']}")
         st.write(f"**Best Weather:** {food_item['Weather_Type']}")
     
