@@ -113,9 +113,13 @@ def legacy_generate_recommendations(user_id, weather_preference, user_preference
         weather_foods.loc[:, 'Spice_Level'] = pd.to_numeric(weather_foods['Spice_Level'], errors='coerce').fillna(0).astype(int)
         weather_foods.loc[:, 'Sugar_Level'] = pd.to_numeric(weather_foods['Sugar_Level'], errors='coerce').fillna(0).astype(int)
         
+        # Convert preference values to integers to avoid type mismatch
+        spice_pref_int = int(spice_pref) if spice_pref is not None else 5
+        sugar_pref_int = int(sugar_pref) if sugar_pref is not None else 5
+        
         # Now calculate differences
-        weather_foods.loc[:, 'spice_diff'] = abs(weather_foods['Spice_Level'] - spice_pref)
-        weather_foods.loc[:, 'sugar_diff'] = abs(weather_foods['Sugar_Level'] - sugar_pref)
+        weather_foods.loc[:, 'spice_diff'] = abs(weather_foods['Spice_Level'] - spice_pref_int)
+        weather_foods.loc[:, 'sugar_diff'] = abs(weather_foods['Sugar_Level'] - sugar_pref_int)
         
         # Weighted score (lower is better)
         weather_foods.loc[:, 'score'] = weather_foods['spice_diff'] + weather_foods['sugar_diff']

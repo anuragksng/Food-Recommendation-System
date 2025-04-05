@@ -102,20 +102,10 @@ def show_main_app():
             st.markdown(f"**Dietary Preference:** {user_dict['dietary_preference']}")
             st.markdown(f"**Allergies:** {format_allergies(user_dict['allergies'])}")
             
-            # Weather selection
+            # Display current weather preference (read-only)
             st.markdown("### Current Weather")
-            weather_options = ["Cold", "Hot", "Rainy", "Humid"]
-            selected_weather = st.selectbox(
-                "Select your current weather:",
-                weather_options,
-                index=weather_options.index(st.session_state['weather']) if st.session_state['weather'] in weather_options else 0
-            )
-            
-            # Update weather in session state if changed
-            if selected_weather != st.session_state['weather']:
-                st.session_state['weather'] = selected_weather
-                st.session_state['recommendations'] = []
-                st.rerun()
+            st.markdown(f"**Weather Type:** {st.session_state['weather']}")
+            st.markdown("*Weather preferences are set during signup and\nused for your personalized recommendations.*")
             
             # Logout button
             if st.button("Logout"):
@@ -182,29 +172,7 @@ def show_main_app():
             # Weather info
             st.markdown(f"Based on **{st.session_state['weather']}** weather conditions")
             
-            # Get recommendations if not already loaded
-            if not st.session_state['recommendations']:
-                # Get liked and disliked foods
-                liked_foods, disliked_foods = get_liked_disliked_foods(user_id)
-                
-                # Get search history
-                search_history = get_search_history(user_id)
-                
-                # If user has preferences, use them to update recommendations
-                if liked_foods or search_history:
-                    st.session_state['recommendations'] = update_recommendations(
-                        user_id, 
-                        st.session_state['weather'],
-                        liked_foods, 
-                        disliked_foods, 
-                        search_history
-                    )
-                else:
-                    # Otherwise, use initial recommendations
-                    st.session_state['recommendations'] = generate_initial_recommendations(
-                        user_id, 
-                        st.session_state['weather']
-                    )
+            # We will load recommendations as needed in the section below
             
             # Force refresh recommendations button
             if st.button("Refresh Recommendations"):
@@ -232,8 +200,37 @@ def show_main_app():
                         st.session_state['viewing_food'] = food_item['Food_ID']
                         st.rerun()
             else:
-                st.info("Loading recommendations...")
-                st.rerun()
+                # Show loading message
+                with st.spinner("Generating your personalized recommendations..."):
+                    # Directly generate recommendations here instead of using st.rerun()
+                    # Get liked and disliked foods
+                    liked_foods, disliked_foods = get_liked_disliked_foods(user_id)
+                    
+                    # Get search history
+                    search_history = get_search_history(user_id)
+                    
+                    # If user has preferences, use them to update recommendations
+                    if liked_foods or search_history:
+                        st.session_state['recommendations'] = update_recommendations(
+                            user_id, 
+                            st.session_state['weather'],
+                            liked_foods, 
+                            disliked_foods, 
+                            search_history
+                        )
+                    else:
+                        # Otherwise, use initial recommendations
+                        st.session_state['recommendations'] = generate_initial_recommendations(
+                            user_id, 
+                            st.session_state['weather']
+                        )
+                
+                # If still no recommendations after trying to generate them, show a message
+                if not st.session_state['recommendations']:
+                    st.error("Unable to generate recommendations. Please try refreshing the page.")
+                else:
+                    # Force a rerun to display the new recommendations
+                    st.rerun()
 
 # Create necessary Streamlit config files
 import os
