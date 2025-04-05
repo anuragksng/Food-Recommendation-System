@@ -36,12 +36,17 @@ def load_data():
     
     # Ensure all Food_ID fields are integers
     df_food['Food_ID'] = df_food['Food_ID'].astype(int)
-    df_ratings['Food_ID'] = df_ratings['Food_ID'].astype(int)
+    # Fill NaN values in the Food_ID column before converting to integer
+    df_ratings['Food_ID'] = pd.to_numeric(df_ratings['Food_ID'], errors='coerce').fillna(0).astype(int)
     
     # Ensure all User_ID fields are integers
     df_user['User_ID'] = df_user['User_ID'].astype(int)
     df_user_preferences['User_ID'] = df_user_preferences['User_ID'].astype(int)
-    df_ratings['User_ID'] = df_ratings['User_ID'].astype(int)
+    # Fill NaN values in the User_ID column before converting to integer
+    df_ratings['User_ID'] = pd.to_numeric(df_ratings['User_ID'], errors='coerce').fillna(0).astype(int)
+    
+    # Ensure Rating column is also handled properly
+    df_ratings['Rating'] = pd.to_numeric(df_ratings['Rating'], errors='coerce').fillna(0).astype(int)
     
     # Clean allergies data (replace NaN with "None")
     df_user['Allergies'] = df_user['Allergies'].fillna('None')
