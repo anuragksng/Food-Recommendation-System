@@ -21,22 +21,45 @@ def filter_by_dietary_preference(food_items, dietary_preference):
     Returns:
         list: Filtered food items
     """
+    if not food_items:
+        return []
+        
+    if not dietary_preference or dietary_preference.lower() == 'none':
+        return food_items
+        
     filtered_items = []
     
+    # Normalize the dietary preference
+    dp_lower = dietary_preference.lower()
+    
     for item in food_items:
+        # Skip items without Veg_Non information for strict filtering
+        if 'Veg_Non' not in item or item['Veg_Non'] is None:
+            # Only include for non-vegetarian users
+            if dp_lower not in ['vegetarian', 'vegan']:
+                filtered_items.append(item)
+            continue
+            
+        # Normalize the Veg_Non value
+        veg_status = str(item['Veg_Non']).lower() if item['Veg_Non'] else ""
+        
         # For vegetarians, only include vegetarian items
-        if dietary_preference.lower() == 'vegetarian':
-            if item['Veg_Non'] and item['Veg_Non'].lower() == 'veg':
+        if dp_lower == 'vegetarian':
+            if veg_status == 'veg' or veg_status == 'vegetarian':
                 filtered_items.append(item)
+                
         # For vegans, only include vegan items 
-        elif dietary_preference.lower() == 'vegan':
-            if item['Veg_Non'] and item['Veg_Non'].lower() == 'vegan':
+        elif dp_lower == 'vegan':
+            if veg_status == 'vegan':
                 filtered_items.append(item)
+                
         # For gluten-free, exclude items with gluten
-        elif dietary_preference.lower() == 'gluten-free':
+        elif dp_lower == 'gluten-free':
             # This is simplified - in a real app, would need more detailed data
-            if 'gluten' not in str(item.get('Describe', '')).lower():
+            item_desc = str(item.get('Describe', '')).lower()
+            if 'gluten' not in item_desc or 'gluten-free' in item_desc:
                 filtered_items.append(item)
+                
         # For non-vegetarians, include all items
         else:
             filtered_items.append(item)

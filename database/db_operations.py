@@ -276,16 +276,51 @@ def get_foods_by_ids(food_ids):
 
 def search_foods(query):
     """Search for foods based on a query string"""
+    if not query or query.strip() == "":
+        return []
+        
     session = Session()
     try:
-        # Search in dish name, cuisine type, and description
+        # Ensure the query is clean and don't allow empty search
+        clean_query = query.strip()
+        
+        # Add dish_category to search fields
         foods = session.query(Food).filter(
-            (Food.dish_name.ilike(f"%{query}%")) |
-            (Food.cuisine_type.ilike(f"%{query}%")) |
-            (Food.description.ilike(f"%{query}%"))
+            (Food.dish_name.ilike(f"%{clean_query}%")) |
+            (Food.cuisine_type.ilike(f"%{clean_query}%")) |
+            (Food.description.ilike(f"%{clean_query}%")) |
+            (Food.dish_category.ilike(f"%{clean_query}%"))
         ).all()
         
+        # If no results, try more aggressive searching by splitting the query into words
+        if not foods and " " in clean_query:
+            words = clean_query.split()
+            for word in words:
+                if len(word) > 2:  # Only use words longer than 2 characters
+                    word_foods = session.query(Food).filter(
+                        (Food.dish_name.ilike(f"%{word}%")) |
+                        (Food.cuisine_type.ilike(f"%{word}%")) |
+                        (Food.description.ilike(f"%{word}%")) |
+                        (Food.dish_category.ilike(f"%{word}%"))
+                    ).all()
+                    
+                    if word_foods:
+                        foods.extend(word_foods)
+        
+            # Remove duplicates
+            seen_ids = set()
+            unique_foods = []
+            for food in foods:
+                if food.id not in seen_ids:
+                    seen_ids.add(food.id)
+                    unique_foods.append(food)
+            
+            foods = unique_foods
+        
         return foods
+    except Exception as e:
+        print(f"Error in search_foods: {e}")
+        return []
     finally:
         session.close()
 
