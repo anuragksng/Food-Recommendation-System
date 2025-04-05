@@ -1,19 +1,13 @@
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, scoped_session
 import pandas as pd
 import time
+from sqlalchemy.exc import SQLAlchemyError, OperationalError
 from database.models import Base, User, UserPreference, Food, Rating, LikedDislikedFood, SearchHistory, Weather
+from database.db_config import get_db_engine, get_session_factory
 
-# Get database connection URL from environment variable
-DATABASE_URL = os.environ.get('DATABASE_URL')
-
-# Create a database engine
-engine = create_engine(DATABASE_URL)
-
-# Create a session factory
-session_factory = sessionmaker(bind=engine)
-Session = scoped_session(session_factory)
+# Get the database engine and session factory
+engine = get_db_engine()
+Session = get_session_factory()
 
 def init_db():
     """Initialize the database by creating all tables"""
@@ -90,13 +84,19 @@ def import_initial_data():
             session.add(rating)
         
         # Import weather data
-        df_weather = pd.read_csv("attached_assets/weather.csv")
-        for _, row in df_weather.iterrows():
-            weather = Weather(
-                weather_type=row['Weather_Type'],
-                preferred_foods=row['Preferred_Foods']
-            )
-            session.add(weather)
+        try:
+            df_weather = pd.read_csv("attached_assets/weather.csv")
+            for _, row in df_weather.iterrows():
+                # Check if a weather type already exists
+                existing_weather = session.query(Weather).filter(Weather.weather_type == row['Weather_Type']).first()
+                if not existing_weather:
+                    weather = Weather(
+                        weather_type=row['Weather_Type'],
+                        preferred_foods=row['Preferred_Foods']
+                    )
+                    session.add(weather)
+        except Exception as e:
+            print(f"Error importing weather data: {e}")
         
         # Add a test user for easy login
         test_user = User(

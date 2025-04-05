@@ -1,4 +1,5 @@
 import streamlit as st
+import time
 from database.db_operations import get_user_by_username, create_user
 
 def login():
@@ -130,42 +131,88 @@ def signup():
 
 def check_credentials(username, password):
     """
-    Check if the provided credentials are valid
+    Check if the provided credentials are valid with retry logic
     
     In a real app, this would query a database with properly hashed passwords
-    For this demo, we'll simulate the verification process
     """
     if not username or not password:
         return False
-        
-    user = get_user_by_username(username)
     
-    if user and user.password == password:
-        return True
-        
+    # Add retry logic for database connectivity
+    max_retries = 3
+    retry_count = 0
+    backoff_factor = 2
+    
+    while retry_count < max_retries:
+        try:
+            user = get_user_by_username(username)
+            return user is not None and user.password == password
+        except Exception as e:
+            retry_count += 1
+            if retry_count >= max_retries:
+                st.error(f"Database connection error: {e}")
+                return False
+                
+            # Exponential backoff
+            wait_time = backoff_factor ** retry_count
+            time.sleep(wait_time)
+    
     return False
 
 def username_exists(username):
     """
-    Check if a username already exists
+    Check if a username already exists with retry logic for database connection issues
     """
-    user = get_user_by_username(username)
-    return user is not None
+    max_retries = 3
+    retry_count = 0
+    backoff_factor = 2
+    
+    while retry_count < max_retries:
+        try:
+            user = get_user_by_username(username)
+            return user is not None
+        except Exception as e:
+            retry_count += 1
+            if retry_count >= max_retries:
+                st.error(f"Database connection error: {e}")
+                # Return False on failure to avoid preventing signup
+                return False
+            
+            # Exponential backoff
+            wait_time = backoff_factor ** retry_count
+            time.sleep(wait_time)
+            
+    return False
 
 def create_new_user(username, password, age, gender, dietary_preference, allergies, weather_preferences):
     """
-    Create a new user with the provided information
+    Create a new user with the provided information with retry logic
     
     In a real app, this would add an entry to a database with a properly hashed password
-    For this demo, we'll simulate the process
     """
     # Format allergies string
     allergies_str = allergies if allergies else "None"
     
-    # Create user in database
-    user_id = create_user(username, password, age, gender, dietary_preference, allergies_str, weather_preferences)
+    # Create user in database with retry logic
+    max_retries = 3
+    retry_count = 0
+    backoff_factor = 2
     
-    return user_id
+    while retry_count < max_retries:
+        try:
+            user_id = create_user(username, password, age, gender, dietary_preference, allergies_str, weather_preferences)
+            return user_id
+        except Exception as e:
+            retry_count += 1
+            if retry_count >= max_retries:
+                st.error(f"Database error creating user: {e}")
+                return None
+                
+            # Exponential backoff
+            wait_time = backoff_factor ** retry_count
+            time.sleep(wait_time)
+    
+    return None
 
 def check_authentication():
     """
