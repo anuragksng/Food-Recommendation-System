@@ -4,7 +4,7 @@ import random
 from datetime import datetime
 from auth import login, signup, check_authentication
 from data_loader import load_data, get_food_details, get_user_preferences_dict
-from recommender import generate_initial_recommendations, update_recommendations, search_food
+from recommender import generate_initial_recommendations, update_recommendations, search_food, legacy_generate_recommendations, legacy_update_recommendations
 from utils import display_food_item, display_food_details, format_allergies
 from database.db_operations import (get_user_by_username, add_liked_disliked_food,
                                   get_liked_disliked_foods, add_search_term,
@@ -19,7 +19,7 @@ st.set_page_config(
 
 # Initialize session state variables
 if 'weather' not in st.session_state:
-    st.session_state['weather'] = 'Cold'
+    st.session_state['weather'] = None  # Will be set after user login
     
 if 'viewing_food' not in st.session_state:
     st.session_state['viewing_food'] = None
@@ -202,34 +202,72 @@ def show_main_app():
             else:
                 # Show loading message
                 with st.spinner("Generating your personalized recommendations..."):
-                    # Directly generate recommendations here instead of using st.rerun()
-                    # Get liked and disliked foods
-                    liked_foods, disliked_foods = get_liked_disliked_foods(user_id)
-                    
-                    # Get search history
-                    search_history = get_search_history(user_id)
-                    
-                    # If user has preferences, use them to update recommendations
-                    if liked_foods or search_history:
-                        st.session_state['recommendations'] = update_recommendations(
-                            user_id, 
-                            st.session_state['weather'],
-                            liked_foods, 
-                            disliked_foods, 
-                            search_history
-                        )
-                    else:
-                        # Otherwise, use initial recommendations
-                        st.session_state['recommendations'] = generate_initial_recommendations(
+                    try:
+                        # Check if weather is set, if not use a default
+                        if st.session_state['weather'] is None:
+                            st.session_state['weather'] = 'Cold'
+                            st.warning("Using default 'Cold' weather for recommendations.")
+                        
+                        # Get liked and disliked foods
+                        liked_foods, disliked_foods = get_liked_disliked_foods(user_id)
+                        
+                        # Get search history
+                        search_history = get_search_history(user_id)
+                        
+                        # Directly use legacy generation method which is more reliable
+                        st.session_state['recommendations'] = legacy_generate_recommendations(
                             user_id, 
                             st.session_state['weather']
                         )
+                        
+                        # If we got recommendations, and the user has preferences, enhance with user data
+                        if st.session_state['recommendations'] and (liked_foods or search_history):
+                            # Try to enhance recommendations with user preferences
+                            try:
+                                enhanced_recs = update_recommendations(
+                                    user_id, 
+                                    st.session_state['weather'],
+                                    liked_foods, 
+                                    disliked_foods, 
+                                    search_history
+                                )
+                                if enhanced_recs:
+                                    st.session_state['recommendations'] = enhanced_recs
+                            except Exception as e:
+                                st.warning(f"Could not enhance recommendations with your preferences.")
+                    except Exception as e:
+                        st.error(f"Error generating recommendations: {e}")
+                        # Use empty list if all fails
+                        st.session_state['recommendations'] = []
                 
                 # If still no recommendations after trying to generate them, show a message
                 if not st.session_state['recommendations']:
-                    st.error("Unable to generate recommendations. Please try refreshing the page.")
-                else:
-                    # Force a rerun to display the new recommendations
+                    # Try one more time with a fallback approach
+                    try:
+                        # Last attempt with minimal dependencies
+                        df_user, df_food, df_weather, df_user_preferences, df_ratings = load_data()
+                        # Just grab some random food items as a last resort
+                        sample_foods = df_food.sample(min(10, len(df_food)))
+                        recommendations = []
+                        for _, row in sample_foods.iterrows():
+                            food_item = {
+                                'Food_ID': int(row['Food_ID']) if pd.notna(row['Food_ID']) else 0,
+                                'Dish_Name': row['Dish_Name'] if pd.notna(row['Dish_Name']) else "Unknown",
+                                'Cuisine_Type': row['Cuisine_Type'] if pd.notna(row['Cuisine_Type']) else "Various",
+                                'Veg_Non': row['Veg_Non'] if pd.notna(row['Veg_Non']) else "Non-veg",
+                                'Describe': row['Describe'] if pd.notna(row['Describe']) else "No description available",
+                                'Spice_Level': int(row['Spice_Level']) if pd.notna(row['Spice_Level']) else 5,
+                                'Sugar_Level': int(row['Sugar_Level']) if pd.notna(row['Sugar_Level']) else 5,
+                                'Dish_Category': row['Dish_Category'] if pd.notna(row['Dish_Category']) else "Main",
+                                'Weather_Type': row['Weather_Type'] if pd.notna(row['Weather_Type']) else "Any"
+                            }
+                            recommendations.append(food_item)
+                        st.session_state['recommendations'] = recommendations
+                    except Exception as e:
+                        st.error("Unable to generate any recommendations. Please try refreshing the page.")
+                
+                # Force a rerun to display the new recommendations if we have any
+                if st.session_state['recommendations']:
                     st.rerun()
 
 # Create necessary Streamlit config files

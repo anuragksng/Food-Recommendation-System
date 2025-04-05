@@ -31,24 +31,34 @@ def generate_initial_recommendations(user_id, weather_preference, user_preferenc
     # Get dietary preference
     dietary_preference = user_info.get('dietary_preference', 'Non-Vegetarian')
     
-    # Use the hybrid recommendation model for more accurate, personalized results
-    recommendations = hybrid_recommendations(user_id, weather_preference, limit=10)
+    try:
+        # Use the hybrid recommendation model for more accurate, personalized results
+        recommendations = hybrid_recommendations(user_id, weather_preference, limit=10)
+    except Exception as e:
+        # If hybrid recommendations fail, start with an empty list
+        recommendations = []
     
     # If we don't have enough recommendations, fall back to content-based filtering
     if len(recommendations) < 5:
-        content_based_recs = generate_content_based_recommendations(
-            user_id, dietary_preference, weather_preference, limit=10)
-        
-        # Combine recommendations, removing duplicates
-        seen_food_ids = {r['Food_ID'] for r in recommendations}
-        for rec in content_based_recs:
-            if rec['Food_ID'] not in seen_food_ids:
-                recommendations.append(rec)
-                seen_food_ids.add(rec['Food_ID'])
-                
-                # Stop once we have enough recommendations
-                if len(recommendations) >= 10:
-                    break
+        try:
+            content_based_recs = generate_content_based_recommendations(
+                user_id, dietary_preference, weather_preference, limit=10)
+            
+            # Combine recommendations, removing duplicates
+            seen_food_ids = {int(r['Food_ID']) for r in recommendations}
+            for rec in content_based_recs:
+                rec_id = int(rec['Food_ID']) if isinstance(rec['Food_ID'], (int, float, str)) else 0
+                if rec_id not in seen_food_ids:
+                    recommendations.append(rec)
+                    seen_food_ids.add(rec_id)
+        except Exception as e:
+            # Continue with what we have if content-based fails
+            pass
+            
+        # Stop once we have enough recommendations
+        if len(recommendations) >= 10:
+            # Early exit if we already have enough recommendations
+            return recommendations
     
     # Make sure the recommendations adhere to the user's dietary preferences
     recommendations = filter_by_dietary_preference(recommendations, dietary_preference)

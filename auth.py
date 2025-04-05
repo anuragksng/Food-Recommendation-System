@@ -21,6 +21,18 @@ def login():
             st.session_state['logged_in'] = True
             st.session_state['username'] = username
             st.session_state['user_id'] = user.id
+            
+            # Get the user's preferred weather from their preferences
+            from database.db_operations import get_user_preferences
+            user_prefs = get_user_preferences(user.id)
+            
+            if user_prefs and len(user_prefs) > 0:
+                # Use the first weather preference as the default
+                st.session_state['weather'] = user_prefs[0].weather_type
+            else:
+                # Fallback to a default weather type
+                st.session_state['weather'] = 'Cold'
+                
             st.success(f"Welcome back, {username}!")
             st.rerun()
         else:
@@ -109,6 +121,10 @@ def signup():
                 st.session_state['logged_in'] = True
                 st.session_state['username'] = username
                 st.session_state['user_id'] = user_id
+                
+                # Set the preferred weather in the session
+                st.session_state['weather'] = weather_type
+                
                 st.rerun()
             else:
                 st.error("Failed to create account")
