@@ -15,7 +15,7 @@ def display_food_item(food_item, index):
         <div style="padding: 15px; border-radius: 10px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; background-color: white;">
             <h3 style="color: #1E88E5;">{food_item['Dish_Name']}</h3>
             <p><b>Cuisine:</b> {food_item['Cuisine_Type']}</p>
-            <p><b>Type:</b> {food_item['Veg_Non']}</p>
+            <p><b>Type:</b> {food_item.get('Type', food_item.get('Veg_Non', 'Unknown'))}</p>
             <p><b>Category:</b> {food_item['Dish_Category']}</p>
             <p>
                 <span style="display: inline-block; width: 150px;">
@@ -56,7 +56,9 @@ def display_food_details(food_item):
     
     with col1:
         st.write(f"**Cuisine:** {food_item['Cuisine_Type']}")
-        st.write(f"**Type:** {food_item['Veg_Non']}")
+        # Use Type if available, otherwise fall back to Veg_Non
+        type_value = food_item.get('Type', food_item.get('Veg_Non', 'Unknown'))
+        st.write(f"**Type:** {type_value}")
         st.write(f"**Category:** {food_item['Dish_Category']}")
         st.write(f"**Best Weather:** {food_item['Weather_Type']}")
     

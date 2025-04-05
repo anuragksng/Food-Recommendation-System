@@ -40,12 +40,19 @@ def strict_type_filter(food_items, dietary_preference):
     
     # Only include items that EXACTLY match the allowed types
     for item in food_items:
+        # Use Type column if available, otherwise fall back to Veg_Non
+        type_key = 'Type' if 'Type' in item else 'Veg_Non'
+        
         # Skip items with no food type information
-        if 'Veg_Non' not in item or item['Veg_Non'] is None or item['Veg_Non'] == "":
+        if type_key not in item or item[type_key] is None or item[type_key] == "":
             continue
             
         # Normalize the food type for comparison
-        food_type = str(item['Veg_Non']).lower().strip()
+        food_type = str(item[type_key]).lower().strip()
+        
+        # For NonVegetarian items, adjust comparison for exact matching
+        if food_type in ['nonvegetarian', 'non-vegetarian', 'non veg', 'non-veg']:
+            food_type = 'non-vegetarian'
         
         # Only include if the food type EXACTLY matches one of the allowed types
         if food_type in allowed_types:

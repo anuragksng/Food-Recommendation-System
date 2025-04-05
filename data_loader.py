@@ -20,8 +20,14 @@ def load_data():
     # Load user data
     df_user = pd.read_csv("attached_assets/user.csv")
     
-    # Load food data
-    df_food = pd.read_csv("attached_assets/food.csv")
+    # Load standardized food data
+    if os.path.exists("attached_assets/food_standardized.csv"):
+        df_food = pd.read_csv("attached_assets/food_standardized.csv")
+        print("Using standardized food data with Type column")
+    else:
+        # Fallback to original file if standardized version doesn't exist
+        df_food = pd.read_csv("attached_assets/food.csv")
+        print("Using original food data with Veg_Non column")
     
     # Load weather data
     df_weather = pd.read_csv("attached_assets/weather.csv")
@@ -88,17 +94,26 @@ def get_food_details(food_id):
     
     if not food_row.empty:
         food_row = food_row.iloc[0]
-        return {
+        food_dict = {
             'Food_ID': int(food_row['Food_ID']),
             'Dish_Name': food_row['Dish_Name'],
             'Cuisine_Type': food_row['Cuisine_Type'],
-            'Veg_Non': food_row['Veg_Non'],
             'Describe': food_row['Describe'] if not pd.isna(food_row['Describe']) else "No description available",
             'Spice_Level': int(food_row['Spice_Level']),
             'Sugar_Level': int(food_row['Sugar_Level']),
             'Dish_Category': food_row['Dish_Category'],
             'Weather_Type': food_row['Weather_Type']
         }
+        
+        # Handle either Veg_Non or Type column depending on which one exists
+        if 'Type' in food_row:
+            food_dict['Type'] = food_row['Type']
+            food_dict['Veg_Non'] = food_row['Type']  # For backward compatibility
+        elif 'Veg_Non' in food_row:
+            food_dict['Veg_Non'] = food_row['Veg_Non']
+            food_dict['Type'] = food_row['Veg_Non']  # For forward compatibility
+            
+        return food_dict
     
     return None
 

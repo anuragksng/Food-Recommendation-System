@@ -63,8 +63,13 @@ def import_initial_data():
             )
             session.add(pref)
         
-        # Import foods
-        df_food = pd.read_csv("attached_assets/food.csv")
+        # Try to use standardized food data if available
+        try:
+            df_food = pd.read_csv("attached_assets/food_standardized.csv")
+            print("Using standardized food data")
+        except Exception:
+            df_food = pd.read_csv("attached_assets/food.csv")
+            print("Using original food data")
         
         # Clean and convert data
         df_food['Food_ID'] = pd.to_numeric(df_food['Food_ID'], errors='coerce').fillna(0).astype(int)
@@ -72,11 +77,24 @@ def import_initial_data():
         df_food['Sugar_Level'] = pd.to_numeric(df_food['Sugar_Level'], errors='coerce').fillna(0).astype(int)
         
         for _, row in df_food.iterrows():
+            # Determine the food type (from Type column or Veg_Non)
+            if 'Type' in row and not pd.isna(row['Type']):
+                veg_non = row['Veg_Non'] if not pd.isna(row['Veg_Non']) else "Unknown"
+                food_type = row['Type']
+            else:
+                veg_non = row['Veg_Non'] if not pd.isna(row['Veg_Non']) else "Unknown"
+                # Standardize on import if using original data
+                if veg_non.lower() in ['non-vegetarian', 'nonvegetarian', 'non veg', 'non-veg']:
+                    food_type = 'NonVegetarian'
+                else:
+                    food_type = 'Vegetarian'
+            
             food = Food(
                 id=int(row['Food_ID']),
                 dish_name=row['Dish_Name'],
                 cuisine_type=row['Cuisine_Type'] if not pd.isna(row['Cuisine_Type']) else "Other",
-                veg_non=row['Veg_Non'] if not pd.isna(row['Veg_Non']) else "Unknown",
+                veg_non=veg_non,
+                food_type=food_type,
                 description=row['Describe'] if not pd.isna(row['Describe']) else "No description available",
                 spice_level=int(row['Spice_Level']),
                 sugar_level=int(row['Sugar_Level']),
@@ -284,12 +302,13 @@ def search_foods(query):
         # Ensure the query is clean and don't allow empty search
         clean_query = query.strip()
         
-        # Add dish_category to search fields
+        # Add Type column to search fields along with dish_category
         foods = session.query(Food).filter(
             (Food.dish_name.ilike(f"%{clean_query}%")) |
             (Food.cuisine_type.ilike(f"%{clean_query}%")) |
             (Food.description.ilike(f"%{clean_query}%")) |
-            (Food.dish_category.ilike(f"%{clean_query}%"))
+            (Food.dish_category.ilike(f"%{clean_query}%")) |
+            (Food.food_type.ilike(f"%{clean_query}%"))
         ).all()
         
         # If no results, try more aggressive searching by splitting the query into words
@@ -301,7 +320,8 @@ def search_foods(query):
                         (Food.dish_name.ilike(f"%{word}%")) |
                         (Food.cuisine_type.ilike(f"%{word}%")) |
                         (Food.description.ilike(f"%{word}%")) |
-                        (Food.dish_category.ilike(f"%{word}%"))
+                        (Food.dish_category.ilike(f"%{word}%")) |
+                        (Food.food_type.ilike(f"%{word}%"))
                     ).all()
                     
                     if word_foods:
@@ -422,17 +442,26 @@ def get_all_foods():
 
 def convert_db_food_to_dict(food):
     """Convert a Food ORM object to a dictionary"""
-    return {
+    food_dict = {
         'Food_ID': food.id,
         'Dish_Name': food.dish_name,
         'Cuisine_Type': food.cuisine_type,
-        'Veg_Non': food.veg_non,
         'Describe': food.description,
         'Spice_Level': food.spice_level,
         'Sugar_Level': food.sugar_level,
         'Dish_Category': food.dish_category,
         'Weather_Type': food.weather_type
     }
+    
+    # Handle the new Type column and maintain backward compatibility
+    if hasattr(food, 'food_type') and food.food_type:
+        food_dict['Type'] = food.food_type
+        food_dict['Veg_Non'] = food.food_type  # For backward compatibility
+    else:
+        food_dict['Veg_Non'] = food.veg_non
+        food_dict['Type'] = food.veg_non  # For forward compatibility
+        
+    return food_dict
 
 def convert_db_user_to_dict(user):
     """Convert a User ORM object to a dictionary"""

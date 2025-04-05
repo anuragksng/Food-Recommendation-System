@@ -48,7 +48,8 @@ class Food(Base):
     id = Column(Integer, primary_key=True)
     dish_name = Column(String(100), nullable=False)
     cuisine_type = Column(String(50))
-    veg_non = Column(String(20))
+    veg_non = Column(String(20))  # Kept for backward compatibility
+    food_type = Column(String(20))  # New standardized Type column
     description = Column(Text)
     spice_level = Column(Integer)
     sugar_level = Column(Integer)

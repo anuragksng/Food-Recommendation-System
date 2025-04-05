@@ -28,13 +28,20 @@ def is_food_compatible_with_preference(food_item, dietary_preference):
     
     dp_lower = dietary_preference.lower().strip()
     
+    # Determine which food type field to use
+    type_key = 'Type' if 'Type' in food_item else 'Veg_Non'
+    
     # Strict validation for vegetarian/vegan preferences
-    if 'Veg_Non' not in food_item or food_item['Veg_Non'] is None:
-        # If no Veg_Non info, only include for non-veg users
+    if type_key not in food_item or food_item[type_key] is None:
+        # If no food type info, only include for non-veg users
         return dp_lower not in ['vegetarian', 'vegan']
         
-    # Normalize the Veg_Non value
-    veg_status = str(food_item['Veg_Non']).lower().strip() if food_item['Veg_Non'] else ""
+    # Normalize the food type value
+    veg_status = str(food_item[type_key]).lower().strip() if food_item[type_key] else ""
+    
+    # For NonVegetarian items, standardize the comparison
+    if veg_status in ['nonvegetarian', 'non-vegetarian', 'non veg', 'non-veg']:
+        veg_status = 'non-vegetarian'
     
     # STRICT filtering
     if dp_lower == 'vegetarian':
@@ -192,13 +199,25 @@ def generate_content_based_recommendations(user_id, dietary_preference, weather_
             'Food_ID': int(row['Food_ID']),
             'Dish_Name': row['Dish_Name'],
             'Cuisine_Type': row['Cuisine_Type'],
-            'Veg_Non': row['Veg_Non'],
             'Describe': row['Describe'] if not pd.isna(row['Describe']) else "No description available",
             'Spice_Level': int(row['Spice_Level']),
             'Sugar_Level': int(row['Sugar_Level']),
             'Dish_Category': row['Dish_Category'],
             'Weather_Type': row['Weather_Type']
         }
+        
+        # Add Type or Veg_Non based on what's available
+        if 'Type' in row and not pd.isna(row['Type']):
+            food_item['Type'] = row['Type']
+            food_item['Veg_Non'] = row['Type']  # For backward compatibility
+        elif 'Veg_Non' in row and not pd.isna(row['Veg_Non']):
+            food_item['Veg_Non'] = row['Veg_Non']
+            # Standardize the type when adding it
+            veg_non = str(row['Veg_Non']).lower().strip()
+            if veg_non in ['non-vegetarian', 'nonvegetarian', 'non veg', 'non-veg']:
+                food_item['Type'] = 'NonVegetarian'
+            else:
+                food_item['Type'] = 'Vegetarian'
         recommendations.append(food_item)
     
     # Filter recommendations by dietary preference
