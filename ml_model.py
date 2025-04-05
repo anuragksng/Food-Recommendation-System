@@ -15,6 +15,7 @@ from database.db_operations import (get_user_by_username, convert_db_food_to_dic
 def is_food_compatible_with_preference(food_item, dietary_preference):
     """
     Strictly check if a single food item is compatible with the user's dietary preference
+    Only two food types are supported: Vegetarian and NonVegetarian
     
     Args:
         food_item: Dictionary containing food item details
@@ -23,47 +24,30 @@ def is_food_compatible_with_preference(food_item, dietary_preference):
     Returns:
         bool: True if food is compatible, False otherwise
     """
-    if not dietary_preference or dietary_preference.lower() in ['none', 'non-vegetarian', 'any']:
-        return True
-    
-    dp_lower = dietary_preference.lower().strip()
+    # Determine if user is vegetarian
+    is_vegetarian = dietary_preference.lower().strip() == 'vegetarian'
     
     # Determine which food type field to use
     type_key = 'Type' if 'Type' in food_item else 'Veg_Non'
     
-    # Strict validation for vegetarian/vegan preferences
-    if type_key not in food_item or food_item[type_key] is None:
-        # If no food type info, only include for non-veg users
-        return dp_lower not in ['vegetarian', 'vegan']
+    # If no food type info, exclude item 
+    if type_key not in food_item or food_item[type_key] is None or food_item[type_key] == "":
+        return False
         
-    # Normalize the food type value
-    veg_status = str(food_item[type_key]).lower().strip() if food_item[type_key] else ""
+    # Get the food type value
+    food_type = str(food_item[type_key]).strip()
     
-    # For NonVegetarian items, standardize the comparison
-    if veg_status in ['nonvegetarian', 'non-vegetarian', 'non veg', 'non-veg']:
-        veg_status = 'non-vegetarian'
-    
-    # STRICT filtering
-    if dp_lower == 'vegetarian':
-        # Only exact matches for vegetarian foods
-        return veg_status in ['veg', 'vegetarian']
-        
-    elif dp_lower == 'vegan':
-        # Only exact matches for vegan foods
-        return veg_status == 'vegan'
-        
-    elif dp_lower == 'gluten-free':
-        # Check description for gluten mentions
-        item_desc = str(food_item.get('Describe', '')).lower()
-        has_gluten = 'gluten' in item_desc and 'gluten-free' not in item_desc
-        return not has_gluten
-    
-    # Default case: non-vegetarian or unspecified
-    return True
+    if is_vegetarian:
+        # For vegetarian users, only include Vegetarian items
+        return food_type == 'Vegetarian'
+    else:
+        # For non-vegetarian users, only include NonVegetarian items
+        return food_type == 'NonVegetarian'
 
 def filter_by_dietary_preference(food_items, dietary_preference):
     """
     Filter food items based on dietary preference with strict validation
+    Only returns Vegetarian items for vegetarian users and NonVegetarian items for others
     
     Args:
         food_items: List of food item dictionaries
@@ -75,10 +59,7 @@ def filter_by_dietary_preference(food_items, dietary_preference):
     if not food_items:
         return []
         
-    if not dietary_preference or dietary_preference.lower() in ['none', 'non-vegetarian', 'any']:
-        return food_items
-    
-    # Apply strict filtering
+    # Always apply filtering for any preference
     return [item for item in food_items if is_food_compatible_with_preference(item, dietary_preference)]
 
 def create_cuisine_preference_model(user_id, liked_foods):

@@ -57,8 +57,8 @@ def signup():
         gender_options = ["Male", "Female", "Other"]
         gender = st.selectbox("Gender", gender_options)
         
-        # Dietary preferences
-        diet_options = ["Vegetarian", "Non-Vegetarian", "Vegan", "Gluten-Free", "Keto", "Paleo"]
+        # Dietary preferences - only offer Vegetarian and NonVegetarian options
+        diet_options = ["Vegetarian", "NonVegetarian"]
         dietary_preference = st.selectbox("Dietary Preference", diet_options)
         
         allergies = st.text_input("Allergies (comma-separated, leave empty if none)")
