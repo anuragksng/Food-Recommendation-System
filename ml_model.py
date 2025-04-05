@@ -10,6 +10,48 @@ from data_loader import load_data, get_food_details
 from database.db_operations import (get_user_by_username, convert_db_food_to_dict,
                                    get_user_preferences, search_foods, convert_db_user_to_dict)
 
+def is_food_compatible_with_preference(food_item, dietary_preference):
+    """
+    Strictly check if a single food item is compatible with the user's dietary preference
+    
+    Args:
+        food_item: Dictionary containing food item details
+        dietary_preference: User's dietary preference
+        
+    Returns:
+        bool: True if food is compatible, False otherwise
+    """
+    if not dietary_preference or dietary_preference.lower() in ['none', 'non-vegetarian', 'any']:
+        return True
+    
+    dp_lower = dietary_preference.lower().strip()
+    
+    # Strict validation for vegetarian/vegan preferences
+    if 'Veg_Non' not in food_item or food_item['Veg_Non'] is None:
+        # If no Veg_Non info, only include for non-veg users
+        return dp_lower not in ['vegetarian', 'vegan']
+        
+    # Normalize the Veg_Non value
+    veg_status = str(food_item['Veg_Non']).lower().strip() if food_item['Veg_Non'] else ""
+    
+    # STRICT filtering
+    if dp_lower == 'vegetarian':
+        # Only exact matches for vegetarian foods
+        return veg_status in ['veg', 'vegetarian']
+        
+    elif dp_lower == 'vegan':
+        # Only exact matches for vegan foods
+        return veg_status == 'vegan'
+        
+    elif dp_lower == 'gluten-free':
+        # Check description for gluten mentions
+        item_desc = str(food_item.get('Describe', '')).lower()
+        has_gluten = 'gluten' in item_desc and 'gluten-free' not in item_desc
+        return not has_gluten
+    
+    # Default case: non-vegetarian or unspecified
+    return True
+
 def filter_by_dietary_preference(food_items, dietary_preference):
     """
     Filter food items based on dietary preference with strict validation
@@ -24,47 +66,11 @@ def filter_by_dietary_preference(food_items, dietary_preference):
     if not food_items:
         return []
         
-    if not dietary_preference or dietary_preference.lower() == 'none':
+    if not dietary_preference or dietary_preference.lower() in ['none', 'non-vegetarian', 'any']:
         return food_items
-        
-    filtered_items = []
     
-    # Normalize the dietary preference
-    dp_lower = dietary_preference.lower()
-    
-    for item in food_items:
-        # Skip items without Veg_Non information for strict filtering
-        if 'Veg_Non' not in item or item['Veg_Non'] is None:
-            # Only include for non-vegetarian users
-            if dp_lower not in ['vegetarian', 'vegan']:
-                filtered_items.append(item)
-            continue
-            
-        # Normalize the Veg_Non value
-        veg_status = str(item['Veg_Non']).lower() if item['Veg_Non'] else ""
-        
-        # For vegetarians, only include vegetarian items
-        if dp_lower == 'vegetarian':
-            if veg_status == 'veg' or veg_status == 'vegetarian':
-                filtered_items.append(item)
-                
-        # For vegans, only include vegan items 
-        elif dp_lower == 'vegan':
-            if veg_status == 'vegan':
-                filtered_items.append(item)
-                
-        # For gluten-free, exclude items with gluten
-        elif dp_lower == 'gluten-free':
-            # This is simplified - in a real app, would need more detailed data
-            item_desc = str(item.get('Describe', '')).lower()
-            if 'gluten' not in item_desc or 'gluten-free' in item_desc:
-                filtered_items.append(item)
-                
-        # For non-vegetarians, include all items
-        else:
-            filtered_items.append(item)
-            
-    return filtered_items
+    # Apply strict filtering
+    return [item for item in food_items if is_food_compatible_with_preference(item, dietary_preference)]
 
 def create_cuisine_preference_model(user_id, liked_foods):
     """

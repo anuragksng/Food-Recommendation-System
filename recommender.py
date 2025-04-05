@@ -7,7 +7,8 @@ from database.db_operations import (get_food_by_id, get_foods_by_ids,
                                   get_weather_foods, get_liked_disliked_foods, convert_db_food_to_dict,
                                   get_user_by_username)
 from ml_model import (filter_by_dietary_preference, hybrid_recommendations,
-                    generate_content_based_recommendations, get_user_by_username_by_id)
+                    generate_content_based_recommendations, get_user_by_username_by_id,
+                    is_food_compatible_with_preference)
 
 def generate_initial_recommendations(user_id, weather_preference, user_preferences=None):
     """
@@ -448,6 +449,7 @@ def content_based_filtering(search_history, liked_foods, disliked_foods):
 def search_food(query, df_food=None, user_id=None):
     """
     Search for food items based on a query string and user's dietary preference
+    with strict dietary preference filtering
     
     Args:
         query: Search query
@@ -457,6 +459,10 @@ def search_food(query, df_food=None, user_id=None):
     Returns:
         list: Matching food items
     """
+    # If query is empty, return empty results
+    if not query or query.strip() == "":
+        return []
+    
     # Get user's dietary preference if user_id is provided
     dietary_preference = None
     if user_id:
@@ -464,18 +470,51 @@ def search_food(query, df_food=None, user_id=None):
         if user_info:
             dietary_preference = user_info.get('dietary_preference')
     
+    print(f"User dietary preference: {dietary_preference}")  # Debug log
+    
     # Search in database first
     db_results = search_foods(query)
     if db_results:
         results = [convert_db_food_to_dict(food) for food in db_results]
-        # Apply dietary preference filtering if available
+        
+        # Apply strict dietary preference filtering if available
         if dietary_preference:
-            results = filter_by_dietary_preference(results, dietary_preference)
+            # DOUBLE-CHECK: First use the new helper function
+            filtered_results = []
+            for item in results:
+                if is_food_compatible_with_preference(item, dietary_preference):
+                    filtered_results.append(item)
+                    
+            # Then also apply the main filter function as a backup
+            filtered_results = filter_by_dietary_preference(filtered_results, dietary_preference)
+            
+            # Log filtering results
+            print(f"Search filtered foods from {len(results)} to {len(filtered_results)} based on {dietary_preference} preference")
+            
+            return filtered_results
         return results
     
     # If not in database or no results, search in dataframe
     if df_food is None:
         df_user, df_food, df_weather, df_user_preferences, df_ratings = load_data()
+    
+    # Apply pre-filtering for dietary preference BEFORE search if applicable
+    if dietary_preference and dietary_preference.lower() in ['vegetarian', 'vegan']:
+        # Pre-filter the dataframe based on dietary preferences
+        # This ensures we don't even search in non-matching foods
+        vegStatus = ['veg', 'vegetarian'] if dietary_preference.lower() == 'vegetarian' else ['vegan']
+        
+        # Create a copy to avoid warnings
+        df_food_filtered = df_food.copy()
+        
+        # Perform case-insensitive filtering
+        mask = df_food_filtered['Veg_Non'].str.lower().isin(vegStatus)
+        df_food_filtered = df_food_filtered[mask]
+        
+        # If we have results after filtering, use this dataframe instead
+        if not df_food_filtered.empty:
+            df_food = df_food_filtered
+            print(f"Pre-filtered food dataframe to {len(df_food)} foods matching {dietary_preference}")
     
     # Search in dish name, cuisine type, and description
     mask = (
@@ -493,10 +532,38 @@ def search_food(query, df_food=None, user_id=None):
     # Create a copy to avoid SettingWithCopyWarning
     search_results = search_results.copy()
     
+    # If no results, try more aggressive searching with words
+    if search_results.empty and " " in query:
+        print(f"No direct results for '{query}', trying word-level search")
+        words = query.strip().split()
+        for word in words:
+            if len(word) > 2:  # Only use words longer than 2 characters
+                word_mask = (
+                    df_food['Dish_Name'].str.contains(word, case=False, na=False) |
+                    df_food['Cuisine_Type'].str.contains(word, case=False, na=False) |
+                    df_food['Dish_Category'].str.contains(word, case=False, na=False)
+                )
+                
+                # Add description search if not empty
+                if df_food['Describe'].notna().any():
+                    word_mask = word_mask | df_food['Describe'].str.contains(word, case=False, na=False)
+                
+                word_results = df_food[word_mask]
+                
+                if not word_results.empty:
+                    search_results = pd.concat([search_results, word_results])
+    
+    # If still no results, return empty list
+    if search_results.empty:
+        return []
+    
     # Ensure numeric columns are properly converted
     search_results.loc[:, 'Food_ID'] = pd.to_numeric(search_results['Food_ID'], errors='coerce').fillna(0).astype(int)
     search_results.loc[:, 'Spice_Level'] = pd.to_numeric(search_results['Spice_Level'], errors='coerce').fillna(0).astype(int)
     search_results.loc[:, 'Sugar_Level'] = pd.to_numeric(search_results['Sugar_Level'], errors='coerce').fillna(0).astype(int)
+    
+    # Remove duplicates based on Food_ID
+    search_results = search_results.drop_duplicates(subset=['Food_ID'])
     
     # Convert to list of dictionaries
     results = []
@@ -505,7 +572,7 @@ def search_food(query, df_food=None, user_id=None):
             'Food_ID': int(row['Food_ID']),
             'Dish_Name': row['Dish_Name'],
             'Cuisine_Type': row['Cuisine_Type'],
-            'Veg_Non': row['Veg_Non'],
+            'Veg_Non': row['Veg_Non'] if not pd.isna(row['Veg_Non']) else "",
             'Describe': row['Describe'] if not pd.isna(row['Describe']) else "No description available",
             'Spice_Level': int(row['Spice_Level']),
             'Sugar_Level': int(row['Sugar_Level']),
@@ -514,8 +581,20 @@ def search_food(query, df_food=None, user_id=None):
         }
         results.append(food_item)
     
-    # Apply dietary preference filtering if available
+    # Apply final dietary preference filtering
     if dietary_preference:
-        results = filter_by_dietary_preference(results, dietary_preference)
-    
+        # DOUBLE-CHECK: First use the individual item checker
+        filtered_results = []
+        for item in results:
+            if is_food_compatible_with_preference(item, dietary_preference):
+                filtered_results.append(item)
+                
+        # Then also apply the main filter function as a backup
+        filtered_results = filter_by_dietary_preference(filtered_results, dietary_preference)
+        
+        # Log filtering results
+        print(f"CSV search filtered foods from {len(results)} to {len(filtered_results)} based on {dietary_preference} preference")
+        
+        return filtered_results
+        
     return results
