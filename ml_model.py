@@ -9,6 +9,8 @@ from sklearn.neighbors import NearestNeighbors
 from data_loader import load_data, get_food_details
 from database.db_operations import (get_user_by_username, convert_db_food_to_dict,
                                    get_user_preferences, search_foods, convert_db_user_to_dict)
+# No direct import from strict_filter.py here to avoid circular imports
+# The recommender.py module will handle the final strict filtering
 
 def is_food_compatible_with_preference(food_item, dietary_preference):
     """

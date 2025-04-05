@@ -9,6 +9,7 @@ from database.db_operations import (get_food_by_id, get_foods_by_ids,
 from ml_model import (filter_by_dietary_preference, hybrid_recommendations,
                     generate_content_based_recommendations, get_user_by_username_by_id,
                     is_food_compatible_with_preference)
+from strict_filter import apply_strict_filtering, strict_type_filter
 
 def generate_initial_recommendations(user_id, weather_preference, user_preferences=None):
     """
@@ -61,14 +62,20 @@ def generate_initial_recommendations(user_id, weather_preference, user_preferenc
             # Early exit if we already have enough recommendations
             return recommendations
     
-    # Make sure the recommendations adhere to the user's dietary preferences
+    # Apply multiple layers of filtering for dietary preferences
     recommendations = filter_by_dietary_preference(recommendations, dietary_preference)
+    
+    # Apply STRICT food type filtering as final step
+    recommendations = apply_strict_filtering(recommendations, dietary_preference)
+    print(f"After strict filtering, generated {len(recommendations)} recommendations for {dietary_preference} user")
     
     # If still not enough recommendations after filtering, use legacy method
     if len(recommendations) < 3:
         legacy_recs = legacy_generate_recommendations(user_id, weather_preference, user_preferences)
         # Filter the legacy recommendations too
         legacy_recs = filter_by_dietary_preference(legacy_recs, dietary_preference)
+        # Apply strict filtering to legacy recommendations as well
+        legacy_recs = apply_strict_filtering(legacy_recs, dietary_preference)
         
         # Add unique recommendations from legacy method
         seen_food_ids = {r['Food_ID'] for r in recommendations}
@@ -250,13 +257,19 @@ def update_recommendations(user_id, weather_preference, liked_foods, disliked_fo
                 recommendations.append(rec)
                 seen_food_ids.add(rec['Food_ID'])
     
-    # Filter recommendations by dietary preference
+    # Apply multiple layers of filtering for dietary preferences
     filtered_recommendations = filter_by_dietary_preference(recommendations, dietary_preference)
+    
+    # Apply STRICT food type filtering as final safeguard
+    filtered_recommendations = apply_strict_filtering(filtered_recommendations, dietary_preference)
+    print(f"After strict filtering in update_recommendations, generated {len(filtered_recommendations)} recommendations for {dietary_preference} user")
     
     # If not enough recommendations, use the legacy method as a fallback
     if len(filtered_recommendations) < 5:
         legacy_recs = legacy_update_recommendations(user_id, weather_preference, liked_foods, disliked_foods, search_history)
         legacy_filtered = filter_by_dietary_preference(legacy_recs, dietary_preference)
+        # Apply strict filtering to legacy recommendations as well
+        legacy_filtered = apply_strict_filtering(legacy_filtered, dietary_preference)
         
         # Add unique items from legacy recommendations
         seen_food_ids = {rec['Food_ID'] for rec in filtered_recommendations}
@@ -488,6 +501,9 @@ def search_food(query, df_food=None, user_id=None):
             # Then also apply the main filter function as a backup
             filtered_results = filter_by_dietary_preference(filtered_results, dietary_preference)
             
+            # FINAL SAFEGUARD: Apply strict food type filtering 
+            filtered_results = apply_strict_filtering(filtered_results, dietary_preference)
+            
             # Log filtering results
             print(f"Search filtered foods from {len(results)} to {len(filtered_results)} based on {dietary_preference} preference")
             
@@ -591,6 +607,9 @@ def search_food(query, df_food=None, user_id=None):
                 
         # Then also apply the main filter function as a backup
         filtered_results = filter_by_dietary_preference(filtered_results, dietary_preference)
+        
+        # FINAL SAFEGUARD: Apply strict food type filtering 
+        filtered_results = apply_strict_filtering(filtered_results, dietary_preference)
         
         # Log filtering results
         print(f"CSV search filtered foods from {len(results)} to {len(filtered_results)} based on {dietary_preference} preference")
