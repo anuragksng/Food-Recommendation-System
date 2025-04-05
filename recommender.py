@@ -40,29 +40,46 @@ def generate_initial_recommendations(user_id, weather_preference, user_preferenc
         meal_type = user_pref.meal_type
         
         # Calculate similarity scores - ensure proper type conversion
+        # Create a copy to avoid SettingWithCopyWarning
+        weather_foods = weather_foods.copy()
+        
         # First make sure spice and sugar levels are numeric
-        weather_foods['Spice_Level'] = pd.to_numeric(weather_foods['Spice_Level'], errors='coerce').fillna(0).astype(int)
-        weather_foods['Sugar_Level'] = pd.to_numeric(weather_foods['Sugar_Level'], errors='coerce').fillna(0).astype(int)
+        weather_foods.loc[:, 'Spice_Level'] = pd.to_numeric(weather_foods['Spice_Level'], errors='coerce').fillna(0).astype(int)
+        weather_foods.loc[:, 'Sugar_Level'] = pd.to_numeric(weather_foods['Sugar_Level'], errors='coerce').fillna(0).astype(int)
         
         # Now calculate differences
-        weather_foods['spice_diff'] = abs(weather_foods['Spice_Level'] - spice_pref)
-        weather_foods['sugar_diff'] = abs(weather_foods['Sugar_Level'] - sugar_pref)
+        weather_foods.loc[:, 'spice_diff'] = abs(weather_foods['Spice_Level'] - spice_pref)
+        weather_foods.loc[:, 'sugar_diff'] = abs(weather_foods['Sugar_Level'] - sugar_pref)
         
         # Weighted score (lower is better)
-        weather_foods['score'] = weather_foods['spice_diff'] + weather_foods['sugar_diff']
+        weather_foods.loc[:, 'score'] = weather_foods['spice_diff'] + weather_foods['sugar_diff']
         
         # Filter by meal type if specified
         if meal_type and meal_type.lower() != 'any':
-            # Split dish category and check if meal type is in any part
-            meal_filter = weather_foods['Dish_Category'].str.lower().str.contains(meal_type.lower())
-            weather_foods = weather_foods[meal_filter]
+            # First make sure Dish_Category is properly handled for missing values
+            weather_foods.loc[:, 'Dish_Category'] = weather_foods['Dish_Category'].fillna('').astype(str)
+            
+            # Create meal filter that handles NaN values properly
+            meal_filter = weather_foods['Dish_Category'].str.lower().str.contains(meal_type.lower(), na=False)
+            
+            # Apply filter only if we have valid results
+            if meal_filter.any():
+                weather_foods = weather_foods[meal_filter]
         
         # Sort by score (ascending)
         weather_foods = weather_foods.sort_values('score')
     
     # Remove disliked foods
-    if disliked_foods:
-        weather_foods = weather_foods[~weather_foods['Food_ID'].isin(disliked_foods)]
+    if disliked_foods and not weather_foods.empty:
+        # Make sure Food_ID is properly formatted first
+        weather_foods = weather_foods.copy()  # Create a copy to avoid SettingWithCopyWarning
+        weather_foods.loc[:, 'Food_ID'] = pd.to_numeric(weather_foods['Food_ID'], errors='coerce').fillna(0).astype(int)
+        
+        # Convert disliked_foods to integers for proper comparison
+        disliked_foods_int = [int(x) for x in disliked_foods if pd.notna(x)]
+        
+        if disliked_foods_int:
+            weather_foods = weather_foods[~weather_foods['Food_ID'].isin(disliked_foods_int)]
     
     # Convert to list of dictionaries
     recommendations = []
@@ -85,10 +102,13 @@ def generate_initial_recommendations(user_id, weather_preference, user_preferenc
         # Add some general recommendations from foods table
         general_recs = df_food.sample(min(5, len(df_food)))
         
+        # Create a copy to avoid SettingWithCopyWarning
+        general_recs = general_recs.copy()
+        
         # Ensure numeric columns are properly converted
-        general_recs['Food_ID'] = pd.to_numeric(general_recs['Food_ID'], errors='coerce').fillna(0).astype(int)
-        general_recs['Spice_Level'] = pd.to_numeric(general_recs['Spice_Level'], errors='coerce').fillna(0).astype(int)
-        general_recs['Sugar_Level'] = pd.to_numeric(general_recs['Sugar_Level'], errors='coerce').fillna(0).astype(int)
+        general_recs.loc[:, 'Food_ID'] = pd.to_numeric(general_recs['Food_ID'], errors='coerce').fillna(0).astype(int)
+        general_recs.loc[:, 'Spice_Level'] = pd.to_numeric(general_recs['Spice_Level'], errors='coerce').fillna(0).astype(int)
+        general_recs.loc[:, 'Sugar_Level'] = pd.to_numeric(general_recs['Sugar_Level'], errors='coerce').fillna(0).astype(int)
         
         for _, row in general_recs.iterrows():
             if int(row['Food_ID']) not in [r['Food_ID'] for r in recommendations]:
@@ -218,7 +238,15 @@ def collaborative_filtering(user_id, liked_foods, disliked_foods):
         recommended_food_ids.update(highly_rated)
     
     # Remove foods that the current user has already rated
-    recommended_food_ids = recommended_food_ids - set(liked_foods + disliked_foods)
+    # First, convert liked_foods and disliked_foods to integers
+    liked_foods_int = [int(x) for x in liked_foods if str(x).isdigit()]
+    disliked_foods_int = [int(x) for x in disliked_foods if str(x).isdigit()]
+    
+    # Then create a set with valid food IDs only
+    rated_foods = set(liked_foods_int + disliked_foods_int)
+    
+    # Remove rated foods from recommendations
+    recommended_food_ids = recommended_food_ids - rated_foods
     
     # Get details for the recommended foods
     recommendations = []
@@ -259,11 +287,15 @@ def content_based_filtering(search_history, liked_foods, disliked_foods):
     seen_food_ids = set()
     filtered_results = []
     
+    # Convert liked_foods and disliked_foods to integers for proper comparison
+    liked_foods_int = [int(x) for x in liked_foods if str(x).isdigit()]
+    disliked_foods_int = [int(x) for x in disliked_foods if str(x).isdigit()]
+    
     for food in search_results:
-        food_id = food['Food_ID']
+        food_id = int(food['Food_ID'])  # Ensure food_id is an integer
         if (food_id not in seen_food_ids and 
-            food_id not in liked_foods and 
-            food_id not in disliked_foods):
+            food_id not in liked_foods_int and 
+            food_id not in disliked_foods_int):
             seen_food_ids.add(food_id)
             filtered_results.append(food)
     
@@ -302,10 +334,13 @@ def search_food(query, df_food=None):
     
     search_results = df_food[mask]
     
+    # Create a copy to avoid SettingWithCopyWarning
+    search_results = search_results.copy()
+    
     # Ensure numeric columns are properly converted
-    search_results['Food_ID'] = pd.to_numeric(search_results['Food_ID'], errors='coerce').fillna(0).astype(int)
-    search_results['Spice_Level'] = pd.to_numeric(search_results['Spice_Level'], errors='coerce').fillna(0).astype(int)
-    search_results['Sugar_Level'] = pd.to_numeric(search_results['Sugar_Level'], errors='coerce').fillna(0).astype(int)
+    search_results.loc[:, 'Food_ID'] = pd.to_numeric(search_results['Food_ID'], errors='coerce').fillna(0).astype(int)
+    search_results.loc[:, 'Spice_Level'] = pd.to_numeric(search_results['Spice_Level'], errors='coerce').fillna(0).astype(int)
+    search_results.loc[:, 'Sugar_Level'] = pd.to_numeric(search_results['Sugar_Level'], errors='coerce').fillna(0).astype(int)
     
     # Convert to list of dictionaries
     results = []
