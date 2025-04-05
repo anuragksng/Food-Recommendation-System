@@ -214,11 +214,27 @@ def show_main_app():
                         # Get search history
                         search_history = get_search_history(user_id)
                         
-                        # Directly use legacy generation method which is more reliable
-                        st.session_state['recommendations'] = legacy_generate_recommendations(
+                        # Get user's dietary preference for filtering
+                        user_dict = convert_db_user_to_dict(user)
+                        dietary_preference = user_dict.get('dietary_preference', 'NonVegetarian')
+                        
+                        # Use the legacy generation method but apply strict filtering
+                        recommendations = legacy_generate_recommendations(
                             user_id, 
                             st.session_state['weather']
                         )
+                        
+                        # Import the strict filtering functions
+                        from strict_filter import apply_strict_filtering
+                        from ml_model import filter_by_dietary_preference
+                        
+                        # Apply dietary preference filtering
+                        recommendations = filter_by_dietary_preference(recommendations, dietary_preference)
+                        
+                        # Apply strict filtering to ensure only compatible food types are shown
+                        st.session_state['recommendations'] = apply_strict_filtering(recommendations, dietary_preference)
+                        
+                        print(f"App.py: After strict filtering, {len(st.session_state['recommendations'])} recommendations for {dietary_preference} user")
                         
                         # If we got recommendations, and the user has preferences, enhance with user data
                         if st.session_state['recommendations'] and (liked_foods or search_history):
@@ -247,7 +263,25 @@ def show_main_app():
                         # Last attempt with minimal dependencies
                         df_user, df_food, df_weather, df_user_preferences, df_ratings = load_data()
                         # Just grab some random food items as a last resort
-                        sample_foods = df_food.sample(min(10, len(df_food)))
+                        # Get user's dietary preference for filtering
+                        user_dict = convert_db_user_to_dict(user)
+                        dietary_preference = user_dict.get('dietary_preference', 'NonVegetarian')
+                        
+                        # Filter food dataframe by Type based on dietary preference
+                        if 'Type' in df_food.columns:
+                            if dietary_preference == 'Vegetarian':
+                                sample_foods = df_food[df_food['Type'] == 'Vegetarian'].sample(min(20, len(df_food)))
+                            else:
+                                sample_foods = df_food[df_food['Type'] == 'NonVegetarian'].sample(min(20, len(df_food)))
+                        elif 'Veg_Non' in df_food.columns:
+                            if dietary_preference == 'Vegetarian':
+                                sample_foods = df_food[df_food['Veg_Non'] == 'Vegetarian'].sample(min(20, len(df_food)))
+                            else:
+                                sample_foods = df_food[df_food['Veg_Non'] == 'Non-Vegetarian'].sample(min(20, len(df_food)))
+                        else:
+                            # If no type column, get random samples and filter later
+                            sample_foods = df_food.sample(min(20, len(df_food)))
+                            
                         recommendations = []
                         for _, row in sample_foods.iterrows():
                             food_item = {
@@ -261,8 +295,25 @@ def show_main_app():
                                 'Dish_Category': row['Dish_Category'] if pd.notna(row['Dish_Category']) else "Main",
                                 'Weather_Type': row['Weather_Type'] if pd.notna(row['Weather_Type']) else "Any"
                             }
+                            
+                            # Add Type column if present
+                            if 'Type' in row and not pd.isna(row['Type']):
+                                food_item['Type'] = row['Type']
+                            elif 'Veg_Non' in row and not pd.isna(row['Veg_Non']):
+                                # Standardize to Type
+                                veg_status = str(row['Veg_Non']).lower()
+                                food_item['Type'] = 'NonVegetarian' if 'non' in veg_status else 'Vegetarian'
+                            
                             recommendations.append(food_item)
-                        st.session_state['recommendations'] = recommendations
+                            
+                        # Apply dietary preference filtering to be extra sure
+                        from strict_filter import apply_strict_filtering
+                        from ml_model import filter_by_dietary_preference
+                        
+                        recommendations = filter_by_dietary_preference(recommendations, dietary_preference)
+                        st.session_state['recommendations'] = apply_strict_filtering(recommendations, dietary_preference)
+                        
+                        print(f"App.py fallback: After strict filtering, {len(st.session_state['recommendations'])} recommendations for {dietary_preference} user")
                     except Exception as e:
                         st.error("Unable to generate any recommendations. Please try refreshing the page.")
                 

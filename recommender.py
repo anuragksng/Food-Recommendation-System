@@ -183,6 +183,15 @@ def legacy_generate_recommendations(user_id, weather_preference, user_preference
             'Dish_Category': row['Dish_Category'],
             'Weather_Type': row['Weather_Type']
         }
+        
+        # Add standardized Type field based on either Type column (if it exists) or Veg_Non
+        if 'Type' in row and not pd.isna(row['Type']):
+            food_item['Type'] = row['Type']
+        else:
+            # Standardize Veg_Non to Type field
+            veg_status = str(row['Veg_Non']).lower()
+            food_item['Type'] = 'NonVegetarian' if 'non' in veg_status else 'Vegetarian'
+            
         recommendations.append(food_item)
     
     # If we don't have enough recommendations, add general recommendations
@@ -211,6 +220,14 @@ def legacy_generate_recommendations(user_id, weather_preference, user_preference
                     'Dish_Category': row['Dish_Category'],
                     'Weather_Type': row['Weather_Type']
                 }
+                
+                # Add standardized Type field based on either Type column (if it exists) or Veg_Non
+                if 'Type' in row and not pd.isna(row['Type']):
+                    food_item['Type'] = row['Type']
+                else:
+                    # Standardize Veg_Non to Type field
+                    veg_status = str(row['Veg_Non']).lower()
+                    food_item['Type'] = 'NonVegetarian' if 'non' in veg_status else 'Vegetarian'
                 recommendations.append(food_item)
     
     return recommendations
@@ -595,6 +612,14 @@ def search_food(query, df_food=None, user_id=None):
             'Dish_Category': row['Dish_Category'],
             'Weather_Type': row['Weather_Type']
         }
+        
+        # Add standardized Type field based on either Type column (if it exists) or Veg_Non
+        if 'Type' in row and not pd.isna(row['Type']):
+            food_item['Type'] = row['Type']
+        else:
+            # Standardize Veg_Non to Type field
+            veg_status = str(row['Veg_Non']).lower()
+            food_item['Type'] = 'NonVegetarian' if 'non' in veg_status else 'Vegetarian'
         results.append(food_item)
     
     # Apply final dietary preference filtering
