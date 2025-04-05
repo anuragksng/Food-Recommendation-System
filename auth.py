@@ -52,54 +52,38 @@ def signup():
         allergies = st.text_input("Allergies (comma-separated, leave empty if none)")
         
         # Weather-based preferences
-        st.subheader("Preferences by Weather")
+        st.subheader("Food Preferences")
         
         # Create a dictionary to store preferences
         weather_preferences = {}
         
-        # Cold weather preferences
-        st.write("Cold Weather")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            cold_spice = st.slider("Spice Preference (Cold)", 0, 10, 5)
-        with col2:
-            cold_sugar = st.slider("Sugar Preference (Cold)", 0, 10, 5)
-        with col3:
-            cold_meal = st.selectbox("Preferred Meal (Cold)", ["Breakfast", "Lunch", "Dinner", "Snack"])
-        weather_preferences["Cold"] = {"spice": cold_spice, "sugar": cold_sugar, "meal_type": cold_meal}
+        # Select preferred weather type
+        weather_type = st.selectbox(
+            "Select your preferred weather type:",
+            ["Cold", "Hot", "Rainy", "Humid"]
+        )
         
-        # Hot weather preferences
-        st.write("Hot Weather")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            hot_spice = st.slider("Spice Preference (Hot)", 0, 10, 5)
-        with col2:
-            hot_sugar = st.slider("Sugar Preference (Hot)", 0, 10, 5)
-        with col3:
-            hot_meal = st.selectbox("Preferred Meal (Hot)", ["Breakfast", "Lunch", "Dinner", "Snack"])
-        weather_preferences["Hot"] = {"spice": hot_spice, "sugar": hot_sugar, "meal_type": hot_meal}
+        # Set preferences for the selected weather
+        st.write(f"Set your preferences for {weather_type} weather:")
         
-        # Rainy weather preferences
-        st.write("Rainy Weather")
         col1, col2, col3 = st.columns(3)
         with col1:
-            rainy_spice = st.slider("Spice Preference (Rainy)", 0, 10, 5)
+            spice_pref = st.slider(f"Spice Preference ({weather_type})", 0, 10, 5)
         with col2:
-            rainy_sugar = st.slider("Sugar Preference (Rainy)", 0, 10, 5)
+            sugar_pref = st.slider(f"Sugar Preference ({weather_type})", 0, 10, 5)
         with col3:
-            rainy_meal = st.selectbox("Preferred Meal (Rainy)", ["Breakfast", "Lunch", "Dinner", "Snack"])
-        weather_preferences["Rainy"] = {"spice": rainy_spice, "sugar": rainy_sugar, "meal_type": rainy_meal}
+            meal_pref = st.selectbox(f"Preferred Meal ({weather_type})", ["Any", "Breakfast", "Lunch", "Dinner", "Snack"])
         
-        # Humid weather preferences
-        st.write("Humid Weather")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            humid_spice = st.slider("Spice Preference (Humid)", 0, 10, 5)
-        with col2:
-            humid_sugar = st.slider("Sugar Preference (Humid)", 0, 10, 5)
-        with col3:
-            humid_meal = st.selectbox("Preferred Meal (Humid)", ["Breakfast", "Lunch", "Dinner", "Snack"])
-        weather_preferences["Humid"] = {"spice": humid_spice, "sugar": humid_sugar, "meal_type": humid_meal}
+        # Store preferences for selected weather
+        weather_preferences[weather_type] = {"spice": spice_pref, "sugar": sugar_pref, "meal_type": meal_pref}
+        
+        # Use default values for other weather types
+        default_meal = "Any"
+        default_value = 5
+        
+        for w_type in ["Cold", "Hot", "Rainy", "Humid"]:
+            if w_type != weather_type:
+                weather_preferences[w_type] = {"spice": default_value, "sugar": default_value, "meal_type": default_meal}
         
         submit_button = st.form_submit_button("Sign Up")
         
