@@ -4,11 +4,77 @@ from sklearn.metrics.pairwise import cosine_similarity
 from data_loader import load_data, get_food_details
 from database.db_operations import (get_food_by_id, get_foods_by_ids, 
                                   get_user_weather_preference, search_foods,
-                                  get_weather_foods, get_liked_disliked_foods, convert_db_food_to_dict)
+                                  get_weather_foods, get_liked_disliked_foods, convert_db_food_to_dict,
+                                  get_user_by_username)
+from ml_model import (filter_by_dietary_preference, hybrid_recommendations,
+                    generate_content_based_recommendations, get_user_by_username_by_id)
 
 def generate_initial_recommendations(user_id, weather_preference, user_preferences=None):
     """
     Generate initial food recommendations for a user based on their preferences and current weather
+    
+    Args:
+        user_id: The ID of the user
+        weather_preference: Current weather condition
+        user_preferences: User's preferences (if already loaded)
+        
+    Returns:
+        list: List of recommended food items
+    """
+    # Get user information to determine dietary preference
+    user_info = get_user_by_username_by_id(user_id)
+    
+    if not user_info:
+        # Fallback to original implementation if user info not available
+        return legacy_generate_recommendations(user_id, weather_preference, user_preferences)
+        
+    # Get dietary preference
+    dietary_preference = user_info.get('dietary_preference', 'Non-Vegetarian')
+    
+    # Use the hybrid recommendation model for more accurate, personalized results
+    recommendations = hybrid_recommendations(user_id, weather_preference, limit=10)
+    
+    # If we don't have enough recommendations, fall back to content-based filtering
+    if len(recommendations) < 5:
+        content_based_recs = generate_content_based_recommendations(
+            user_id, dietary_preference, weather_preference, limit=10)
+        
+        # Combine recommendations, removing duplicates
+        seen_food_ids = {r['Food_ID'] for r in recommendations}
+        for rec in content_based_recs:
+            if rec['Food_ID'] not in seen_food_ids:
+                recommendations.append(rec)
+                seen_food_ids.add(rec['Food_ID'])
+                
+                # Stop once we have enough recommendations
+                if len(recommendations) >= 10:
+                    break
+    
+    # Make sure the recommendations adhere to the user's dietary preferences
+    recommendations = filter_by_dietary_preference(recommendations, dietary_preference)
+    
+    # If still not enough recommendations after filtering, use legacy method
+    if len(recommendations) < 3:
+        legacy_recs = legacy_generate_recommendations(user_id, weather_preference, user_preferences)
+        # Filter the legacy recommendations too
+        legacy_recs = filter_by_dietary_preference(legacy_recs, dietary_preference)
+        
+        # Add unique recommendations from legacy method
+        seen_food_ids = {r['Food_ID'] for r in recommendations}
+        for rec in legacy_recs:
+            if rec['Food_ID'] not in seen_food_ids:
+                recommendations.append(rec)
+                seen_food_ids.add(rec['Food_ID'])
+                
+                # Stop once we have enough recommendations
+                if len(recommendations) >= 10:
+                    break
+    
+    return recommendations
+
+def legacy_generate_recommendations(user_id, weather_preference, user_preferences=None):
+    """
+    Original recommendation algorithm as a fallback method
     
     Args:
         user_id: The ID of the user
@@ -141,8 +207,72 @@ def update_recommendations(user_id, weather_preference, liked_foods, disliked_fo
     Returns:
         list: Updated list of recommended food items
     """
+    # Get user information to determine dietary preference
+    user_info = get_user_by_username_by_id(user_id)
+    if not user_info:
+        # Fall back to legacy method if user info not available
+        return legacy_update_recommendations(user_id, weather_preference, liked_foods, disliked_foods, search_history)
+    
+    # Get dietary preference
+    dietary_preference = user_info.get('dietary_preference', 'Non-Vegetarian')
+    
+    # Use advanced hybrid recommendations
+    recommendations = hybrid_recommendations(user_id, weather_preference, limit=15)
+    
+    # Add content-based recommendations from search history (if any)
+    if search_history:
+        # Get content-based recommendations from search history
+        content_recs = []
+        for search_term in search_history[:3]:  # Use recent searches
+            foods = search_foods(search_term)
+            for food in foods:
+                content_recs.append(convert_db_food_to_dict(food))
+        
+        # Remove duplicates
+        seen_food_ids = {rec['Food_ID'] for rec in recommendations}
+        for rec in content_recs:
+            if rec['Food_ID'] not in seen_food_ids:
+                recommendations.append(rec)
+                seen_food_ids.add(rec['Food_ID'])
+    
+    # Filter recommendations by dietary preference
+    filtered_recommendations = filter_by_dietary_preference(recommendations, dietary_preference)
+    
+    # If not enough recommendations, use the legacy method as a fallback
+    if len(filtered_recommendations) < 5:
+        legacy_recs = legacy_update_recommendations(user_id, weather_preference, liked_foods, disliked_foods, search_history)
+        legacy_filtered = filter_by_dietary_preference(legacy_recs, dietary_preference)
+        
+        # Add unique items from legacy recommendations
+        seen_food_ids = {rec['Food_ID'] for rec in filtered_recommendations}
+        for rec in legacy_filtered:
+            if rec['Food_ID'] not in seen_food_ids:
+                filtered_recommendations.append(rec)
+                seen_food_ids.add(rec['Food_ID'])
+                
+                # Stop once we have enough recommendations
+                if len(filtered_recommendations) >= 10:
+                    break
+    
+    # Return up to 10 recommendations
+    return filtered_recommendations[:10]
+
+def legacy_update_recommendations(user_id, weather_preference, liked_foods, disliked_foods, search_history):
+    """
+    Original recommendation update algorithm as a fallback method
+    
+    Args:
+        user_id: The ID of the user
+        weather_preference: Current weather condition
+        liked_foods: List of food IDs that the user has liked
+        disliked_foods: List of food IDs that the user has disliked
+        search_history: List of search terms used by the user
+        
+    Returns:
+        list: Updated list of recommended food items
+    """
     # Get initial recommendations
-    initial_recs = generate_initial_recommendations(user_id, weather_preference)
+    initial_recs = legacy_generate_recommendations(user_id, weather_preference)
     
     # Get collaborative and content-based recommendations
     collab_recs = []
@@ -301,21 +431,33 @@ def content_based_filtering(search_history, liked_foods, disliked_foods):
     
     return filtered_results[:5]
 
-def search_food(query, df_food=None):
+def search_food(query, df_food=None, user_id=None):
     """
-    Search for food items based on a query string
+    Search for food items based on a query string and user's dietary preference
     
     Args:
         query: Search query
         df_food: Food dataframe (if already loaded)
+        user_id: The ID of the user (for dietary preference filtering)
         
     Returns:
         list: Matching food items
     """
+    # Get user's dietary preference if user_id is provided
+    dietary_preference = None
+    if user_id:
+        user_info = get_user_by_username_by_id(user_id)
+        if user_info:
+            dietary_preference = user_info.get('dietary_preference')
+    
     # Search in database first
     db_results = search_foods(query)
     if db_results:
-        return [convert_db_food_to_dict(food) for food in db_results]
+        results = [convert_db_food_to_dict(food) for food in db_results]
+        # Apply dietary preference filtering if available
+        if dietary_preference:
+            results = filter_by_dietary_preference(results, dietary_preference)
+        return results
     
     # If not in database or no results, search in dataframe
     if df_food is None:
@@ -357,5 +499,9 @@ def search_food(query, df_food=None):
             'Weather_Type': row['Weather_Type']
         }
         results.append(food_item)
+    
+    # Apply dietary preference filtering if available
+    if dietary_preference:
+        results = filter_by_dietary_preference(results, dietary_preference)
     
     return results

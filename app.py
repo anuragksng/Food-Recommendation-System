@@ -148,8 +148,8 @@ def show_main_app():
                 if search_query:
                     # Add to search history
                     add_search_term(user_id, search_query)
-                    # Get search results
-                    st.session_state['search_results'] = search_food(search_query)
+                    # Get search results with dietary preference filtering
+                    st.session_state['search_results'] = search_food(search_query, user_id=user_id)
                 else:
                     st.session_state['search_results'] = []
             
