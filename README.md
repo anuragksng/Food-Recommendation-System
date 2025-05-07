@@ -59,3 +59,8 @@ The recommendation system uses several data sources:
 - PostgreSQL database with SQLAlchemy ORM
 - Machine learning models for recommendation generation
 - Strict filtering mechanisms for preference matching
+
+## Run At
+streamlit run app.py --server.port 8501
+http://localhost:8501
+http://127.0.0.1:8501

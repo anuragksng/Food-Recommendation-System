@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
 # Get database connection URL from environment variable
-DATABASE_URL = os.environ.get('DATABASE_URL')
+DATABASE_URL = "postgresql://postgres:123@localhost:5432/myprojectdb"
 
 # Create the database engine with connection pool settings
 engine = None

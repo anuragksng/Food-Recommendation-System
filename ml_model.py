@@ -79,7 +79,7 @@ def create_cuisine_preference_model(user_id, liked_foods):
     # Load data
     _, df_food, _, _, _ = load_data()
     
-    # Get details of liked foods
+    # Get details of liked foods, Retrieve details of liked foods
     liked_food_details = []
     for food_id in liked_foods:
         food = get_food_details(food_id)
@@ -101,6 +101,24 @@ def create_cuisine_preference_model(user_id, liked_foods):
     cuisine_preferences = {cuisine: count/total for cuisine, count in cuisine_counts.items()}
     
     return cuisine_preferences
+
+'''
+liked_food_details will contain:
+[
+    {'Food_ID': 101, 'Cuisine_Type': 'Italian', ...},
+    {'Food_ID': 102, 'Cuisine_Type': 'Japanese', ...},
+    {'Food_ID': 103, 'Cuisine_Type': 'Japanese', ...}
+]
+
+
+cuisine_counts will be:
+{'Italian': 1, 'Japanese': 2}
+
+cuisine_preferences will be:
+{'Italian': 1/3, 'Japanese': 2/3}
+
+return {'Italian': 0.3333, 'Japanese': 0.6667}
+'''
 
 def generate_content_based_recommendations(user_id, dietary_preference, weather_type, limit=20):
     """
@@ -139,11 +157,12 @@ def generate_content_based_recommendations(user_id, dietary_preference, weather_
         weather_foods['Describe'].fillna('')
     )
     
-    # Create TF-IDF vectorizer
-    tfidf = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = tfidf.fit_transform(weather_foods['features'])
+    # Create TF-IDF vectorizer (Term Frequency (TF): Measures how often a term appears in a document, Inverse Document Frequency (IDF): Reduces the weight of terms that appear frequently across all documents)
     
-    # Create K-nearest neighbors model
+    tfidf = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = tfidf.fit_transform(weather_foods['features'])  # The tfidf_matrix contains the numerical representation
+    
+    # Create K-nearest neighbors model, this works on cosine similarity
     model = NearestNeighbors(n_neighbors=min(limit, len(weather_foods)), 
                             metric='cosine', algorithm='brute')
     model.fit(tfidf_matrix)
@@ -157,7 +176,7 @@ def generate_content_based_recommendations(user_id, dietary_preference, weather_
         for food_id in liked_foods:
             idx = weather_foods.index[weather_foods['Food_ID'] == food_id].tolist()
             if idx:
-                liked_indices.extend(idx)
+                liked_indices.extend(idx) #returns the indicies of liked food
         
         if liked_indices:
             query_vector = tfidf_matrix[liked_indices].mean(axis=0)
@@ -216,14 +235,7 @@ def hybrid_recommendations(user_id, weather_type, limit=10):
     """
     Generate hybrid recommendations combining content-based and collaborative filtering
     with strict dietary preference filtering
-    
-    Args:
-        user_id: User ID
-        weather_type: Current weather
-        limit: Maximum number of recommendations
-        
-    Returns:
-        list: Recommended food items
+
     """
     # Get user information including dietary preference
     user = get_user_by_username_by_id(user_id)
@@ -249,23 +261,27 @@ def hybrid_recommendations(user_id, weather_type, limit=10):
     
     # Combine recommendations with a weight (70% content-based, 30% collaborative)
     # and remove duplicates
+
     all_recs = []
     seen_food_ids = set()
     
-    # Add content-based first (higher priority)
-    for rec in content_recs:
+    content_limit = int(limit * 0.7)  # 70% from content-based
+    collab_limit = limit - content_limit  # Remaining 30% from collaborative
+
+    # Add content-based recommendations (up to content_limit)
+    for rec in content_recs[:content_limit]:
         if rec['Food_ID'] not in seen_food_ids:
             seen_food_ids.add(rec['Food_ID'])
             all_recs.append(rec)
-            
-    # Add collaborative next
-    for rec in collab_recs:
+
+    # Add collaborative recommendations (up to collab_limit)
+    for rec in collab_recs[:collab_limit]:
         if rec['Food_ID'] not in seen_food_ids:
             seen_food_ids.add(rec['Food_ID'])
             all_recs.append(rec)
-    
-    # Return limited results
-    return all_recs[:limit]
+
+    # Return the final recommendations
+    return all_recs
 
 def get_user_by_username_by_id(user_id):
     """Helper function to get user by ID"""
@@ -316,7 +332,8 @@ def collaborative_filtering_recommendations(user_id, liked_foods, disliked_foods
         if food_id in user_profile.index:
             user_profile[food_id] = 1
     
-    # Calculate similarity between the current user and all other users
+    # Calculate similarity between the current user and all other users, 
+    # Two users are considered similar if their ratings for food items are similar.
     similarities = []
     for user in user_item_matrix.index:
         if user != user_id:
@@ -344,6 +361,8 @@ def collaborative_filtering_recommendations(user_id, liked_foods, disliked_foods
     
     # Remove foods that the current user has already rated
     # First, convert liked_foods and disliked_foods to integers
+    #This code ensures that the recommendations generated by the collaborative filtering system do not 
+    # include food items that the current user has already rated
     liked_foods_int = [int(x) for x in liked_foods if str(x).isdigit()]
     disliked_foods_int = [int(x) for x in disliked_foods if str(x).isdigit()]
     
