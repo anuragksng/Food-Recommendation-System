@@ -64,3 +64,14 @@ The recommendation system uses several data sources:
 streamlit run app.py --server.port 8501
 http://localhost:8501
 http://127.0.0.1:8501
+
+![image](https://github.com/user-attachments/assets/4de769ae-054d-40f1-932f-7a206d81eb44)
+![image](https://github.com/user-attachments/assets/20313c37-2477-4bd7-9079-c2a4d8bf5814)
+![image](https://github.com/user-attachments/assets/e36d9814-435a-4054-b31a-4be94ef94091)
+![image](https://github.com/user-attachments/assets/2916f0b0-f96f-435c-bca7-d138b568f594)
+
+
+
+
+
+
